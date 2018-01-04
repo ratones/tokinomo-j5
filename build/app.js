@@ -10381,8 +10381,13 @@ client.checkConnection().then(function () {
                 var formData = new FormData();
                 formData.append('sound', status.sound);
                 formData.append('product', status.integrity);
-                var fileOfBlob = new File([videofile.video], 'sample.webm');
-                formData.append('files[]', fileOfBlob);
+                //TODO get data from device!!!
+                formData.append('mechanism', 1);
+                formData.append('battery', '22');
+                formData.append('activations', '258');
+                formData.append('id', '13');
+                var fileOfBlob = new File([videofile.video], 'Device13.mp4');
+                formData.append('files', fileOfBlob);
                 client.post(formData);
             });
         });
@@ -10416,7 +10421,8 @@ var HttpClient = function () {
     function HttpClient() {
         _classCallCheck(this, HttpClient);
 
-        this.baseUrl = 'http://www.tokinomo.com';
+        this.checkUrl = 'http://www.tokinomo.com';
+        this.baseUrl = 'http://www.monitor.tokinomo.com';
     }
 
     _createClass(HttpClient, [{
@@ -10426,7 +10432,7 @@ var HttpClient = function () {
 
             return new Promise(function (resolve, reject) {
                 $.ajax({
-                    url: _this.baseUrl,
+                    url: _this.checkUrl,
                     type: 'GET',
                     success: function success() {
                         resolve();
@@ -10441,7 +10447,7 @@ var HttpClient = function () {
         key: 'post',
         value: function post(data) {
             $.ajax({
-                url: this.baseUrl,
+                url: this.baseUrl + '/api/index.php/utils/updates',
                 data: data,
                 type: 'POST',
                 contentType: false, // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
@@ -10564,8 +10570,23 @@ var SelfTest = function () {
 
             var self = this;
             return new Promise(function (resolve, reject) {
-                _this3.processAudio();
-                resolve(true);
+                _this3.processAudio().then(function (res) {
+                    if (res) {
+                        var interv = setInterval(function () {
+                            var res = self.onLevelChange();
+                            if (res > 100) {
+                                clearInterval(interv);
+                                resolve(true);
+                            }
+                        }, 500);
+                        var timeout = setTimeout(function () {
+                            clearInterval(interv);
+                            resolve(false);
+                        }, 10000);
+                    } else {
+                        resolve(false);
+                    }
+                });
             });
         }
     }, {
@@ -10577,31 +10598,38 @@ var SelfTest = function () {
     }, {
         key: 'processAudio',
         value: function processAudio() {
-            window.AudioContext = window.AudioContext || window.webkitAudioContext;
+            var _this4 = this;
 
-            // grab an audio context
-            this.audioContext = new AudioContext();
+            return new Promise(function (resolve) {
 
-            // Attempt to get audio input
-            try {
-                // monkeypatch getUserMedia
-                navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+                window.AudioContext = window.AudioContext || window.webkitAudioContext;
 
-                // ask for an audio input
-                navigator.getUserMedia({
-                    "audio": {
-                        "mandatory": {
-                            "googEchoCancellation": "false",
-                            "googAutoGainControl": "false",
-                            "googNoiseSuppression": "false",
-                            "googHighpassFilter": "false"
-                        },
-                        "optional": []
-                    }
-                }, this.onMicrophoneGranted.bind(this), this.onMicrophoneDenied.bind(this));
-            } catch (e) {
-                alert('getUserMedia threw exception :' + e);
-            }
+                // grab an audio context
+                _this4.audioContext = new AudioContext();
+
+                // Attempt to get audio input
+                try {
+                    // monkeypatch getUserMedia
+                    navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+
+                    // ask for an audio input
+                    navigator.getUserMedia({
+                        "audio": {
+                            "mandatory": {
+                                "googEchoCancellation": "false",
+                                "googAutoGainControl": "false",
+                                "googNoiseSuppression": "false",
+                                "googHighpassFilter": "false"
+                            },
+                            "optional": []
+                        }
+                    }, _this4.onMicrophoneGranted.bind(_this4), _this4.onMicrophoneDenied.bind(_this4));
+                    resolve(true);
+                } catch (e) {
+                    alert('getUserMedia threw exception :' + e);
+                    resolve(false);
+                }
+            });
         }
     }, {
         key: 'onMicrophoneDenied',
@@ -10634,19 +10662,20 @@ var SelfTest = function () {
             // else
             //     canvasContext.fillStyle = "green";
 
-            console.log(meter.volume);
+            return Math.round(this.meter.volume * 1000);
 
             // draw a bar based on the current volume
             // canvasContext.fillRect(0, 0, meter.volume * WIDTH * 1.4, HEIGHT);
 
             // set up the next visual callback
-            // rafID = window.requestAnimationFrame( onLevelChange );
+            //  rafID = window.requestAnimationFrame( onLevelChange );
+            //setInterval(this.onLevelChange.bind(this),1000);
         }
     }, {
         key: 'createAudioMeter',
         value: function createAudioMeter(audioContext, clipLevel, averaging, clipLag) {
             var processor = audioContext.createScriptProcessor(512);
-            processor.onaudioprocess = volumeAudioProcess;
+            processor.onaudioprocess = this.volumeAudioProcess;
             processor.clipping = false;
             processor.lastClip = 0;
             processor.volume = 0;

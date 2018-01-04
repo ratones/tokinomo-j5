@@ -38,8 +38,13 @@ client.checkConnection()
                         let formData = new FormData();
                         formData.append('sound',status.sound);
                         formData.append('product',status.integrity);
-                        var fileOfBlob = new File([videofile.video], 'sample.webm');
-                        formData.append('files[]',fileOfBlob);
+                        //TODO get data from device!!!
+                        formData.append('mechanism',1);
+                        formData.append('battery','22');
+                        formData.append('activations','258');
+                        formData.append('id','13');
+                        var fileOfBlob = new File([videofile.video], 'Device13.mp4');
+                        formData.append('files',fileOfBlob);
                         client.post(formData);
                     });
 
