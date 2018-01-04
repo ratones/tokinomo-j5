@@ -1,0 +1,38 @@
+{
+  "name": "tokinomo-j5",
+  "version": "1.0.0",
+  "description": "tokinomo device app using johnny-five and node",
+  "main": "build/index.html",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Cristi M",
+  "license": "ISC",
+  "dependencies": {
+    "babel-preset-es2015": "^6.3.13",
+    "babel-preset-react": "^6.3.13",
+    "babel-preset-stage-1": "^6.3.13",
+    "babelify": "^7.2.0",
+    "browser-sync": "^2.11.0",
+    "browserify": "^13.0.0",
+    "gulp": "^3.8.10",
+    "gulp-concat": "^2.6.0",
+    "gulp-concat-css": "^2.3.0",
+    "gulp-minify-css": "^1.2.4",
+    "gulp-notify": "^2.1.0",
+    "gulp-uglify": "^2.0.0",
+    "gulp-util": "^3.0.1",
+    "gulp-zip": "^3.2.0",
+    "johnny-five": "^0.12.0",
+    "jquery": "^3.1.1",
+    "merge-stream": "^1.0.1",
+    "pixelmatch": "^4.0.2",
+    "pretty-hrtime": "^1.0.1",
+    "require-dir": "^0.3.0",
+    "rimraf": "^2.6.1",
+    "stringify": "^5.1.0",
+    "videojs-record": "^2.0.5",
+    "vinyl-source-stream": "^1.0.0",
+    "watchify": "^3.6.1"
+  }
+}
