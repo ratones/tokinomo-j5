@@ -22,30 +22,35 @@ client.checkConnection()
             // sound check
             selftest.checkSound()
                 .then((result) => {
-                    if(result){
+                    if (result) {
                         console.log('Sound passed!');
                         status.sound = true;
-                    }else{
+                    } else {
                         console.log('Sound failed!');
                     }
-                    selftest.record().then((videofile)=>{
-                        //read movement and voltage from arduino board
-                        // Arduino.initialize().then(()=>{
-                        //     Arduino.move(300);
-                        //     Arduino.goHome();
-                        // });
-                        //add data to a form and submit
-                        let formData = new FormData();
-                        formData.append('sound',status.sound);
-                        formData.append('product',status.integrity);
-                        //TODO get data from device!!!
-                        formData.append('mechanism',1);
-                        formData.append('battery','22');
-                        formData.append('activations','258');
-                        formData.append('id','13');
-                        var fileOfBlob = new File([videofile.video], 'Device13.mp4');
-                        formData.append('files',fileOfBlob);
-                        client.post(formData);
+                    Arduino.initialize().then(() => {
+                        Arduino.readVoltage().then((res) => { 
+                            status.battery='Volts:'+res.volts+';Amps:'+res.amps;
+                        });
+                        selftest.record().then((videofile) => {
+                            // read movement and voltage from arduino board
+                            // Arduino.initialize().then(()=>{
+                            //     Arduino.move(300);
+                            //     Arduino.goHome();
+                            // });
+                            //add data to a form and submit
+                            let formData = new FormData();
+                            formData.append('sound', status.sound);
+                            formData.append('product', status.integrity);
+                            //TODO get data from device!!!
+                            formData.append('mechanism', 1);
+                            formData.append('battery', status.battery);
+                            formData.append('activations', '258');
+                            formData.append('id', '13');
+                            var fileOfBlob = new File([videofile.video], 'Device13.mp4');
+                            formData.append('files', fileOfBlob);
+                            client.post(formData);
+                        });
                     });
 
                 });
@@ -58,4 +63,8 @@ client.checkConnection()
 
 function resetDevice() {
     selftest.resetDevice();
+    // Arduino.initialize().then(()=>{
+    //     Arduino.readVoltage().then((res)=>{console.log(res)});
+    //     Arduino.goHome();
+    // });
 }

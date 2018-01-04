@@ -10277,9 +10277,46 @@ var Arduino = function () {
             var _this = this;
 
             return new Promise(function (resolve, reject) {
-                _this.board = new five.Board();
+                _this.board = new five.Board({
+                    port: "COM5",
+                    repl: false
+                });
+
                 _this.board.on("ready", function () {
+                    // this.pinMode(20, this.MODES.OUTPUT);
+
+                    // this.loop(500, () => {
+                    //   // Whatever the last value was, write the opposite
+                    //    //this.digitalWrite(20, this.pins[20].value ? 0 : 1);
+                    //   this.digitalWrite(20,0);
+                    // });
+                    this.stepper = new five.Stepper({
+                        type: five.Stepper.TYPE.DRIVER,
+                        stepsPerRev: 200,
+                        pins: {
+                            step: 4,
+                            dir: 5
+                        }
+                    });
+
                     resolve();
+                });
+            });
+        }
+    }, {
+        key: "readVoltage",
+        value: function readVoltage() {
+            return new Promise(function (resolve) {
+                var volts = '0';
+                var amps = '0';
+                var pinv = new five.Pin("A1");
+                var pina = new five.Pin("A9");
+                pinv.query(function (state) {
+                    volts = state.value;
+                    pina.query(function (state) {
+                        amps = state.value;
+                        resove({ volts: volts, amps: amps });
+                    });
                 });
             });
         }
@@ -10371,24 +10408,29 @@ client.checkConnection().then(function () {
             } else {
                 console.log('Sound failed!');
             }
-            selftest.record().then(function (videofile) {
-                //read movement and voltage from arduino board
-                // Arduino.initialize().then(()=>{
-                //     Arduino.move(300);
-                //     Arduino.goHome();
-                // });
-                //add data to a form and submit
-                var formData = new FormData();
-                formData.append('sound', status.sound);
-                formData.append('product', status.integrity);
-                //TODO get data from device!!!
-                formData.append('mechanism', 1);
-                formData.append('battery', '22');
-                formData.append('activations', '258');
-                formData.append('id', '13');
-                var fileOfBlob = new File([videofile.video], 'Device13.mp4');
-                formData.append('files', fileOfBlob);
-                client.post(formData);
+            _board2.default.initialize().then(function () {
+                _board2.default.readVoltage().then(function (res) {
+                    status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
+                });
+                selftest.record().then(function (videofile) {
+                    // read movement and voltage from arduino board
+                    // Arduino.initialize().then(()=>{
+                    //     Arduino.move(300);
+                    //     Arduino.goHome();
+                    // });
+                    //add data to a form and submit
+                    var formData = new FormData();
+                    formData.append('sound', status.sound);
+                    formData.append('product', status.integrity);
+                    //TODO get data from device!!!
+                    formData.append('mechanism', 1);
+                    formData.append('battery', status.battery);
+                    formData.append('activations', '258');
+                    formData.append('id', '13');
+                    var fileOfBlob = new File([videofile.video], 'Device13.mp4');
+                    formData.append('files', fileOfBlob);
+                    client.post(formData);
+                });
             });
         });
     });
@@ -10398,6 +10440,10 @@ client.checkConnection().then(function () {
 
 function resetDevice() {
     selftest.resetDevice();
+    // Arduino.initialize().then(()=>{
+    //     Arduino.readVoltage().then((res)=>{console.log(res)});
+    //     Arduino.goHome();
+    // });
 }
 
 },{"./board/board":2,"./board/settings":3,"./network/client":5,"./selftest/index":6,"./selftest/status":7}],5:[function(require,module,exports){
