@@ -1,3 +1,4 @@
+import Util from './../util';
 export default class CamHandler{
     constructor(options){
       let player = videojs("myVideo", {
@@ -16,20 +17,20 @@ export default class CamHandler{
         });
         // error handling
         player.on('deviceError', function() {
-            console.log('device error:', player.deviceErrorCode);
+            Util.log('device error:', player.deviceErrorCode);
         });
         player.on('error', function(error) {
-            console.log('error:', error);
+            Util.log('error:', error);
         });
         // user clicked the record button and started recording
         player.on('startRecord', function() {
-            console.log('started recording!');
+            Util.log('started recording!');
         });
         // user completed recording and stream is available
         // player.on('finishRecord', function() {
         //     // the blob object contains the recorded data that
         //     // can be downloaded by the user, stored on server etc.
-        //     console.log('finished recording: ', player.recordedData);
+        //     Util.log('finished recording: ', player.recordedData);
         //     player.record().saveAs({'video': 'my-video-file-name.webm'});
         // }); 
         this.player = player;
