@@ -1,4 +1,5 @@
 import CamHandler from '../webcam/camhandler';
+import Util from './../util';
 let fs = nw.require('fs');
 let PNG = nw.require('pngjs').PNG;
 let pixelmatch = nw.require('pixelmatch');
@@ -19,10 +20,9 @@ export default class SelfTest {
             image: true,
             debug: true
         });
-        console.log(this.cam);
         return new Promise((resolve, reject) => {
             this.cam.snapshot().then((image) => {
-                // console.log(image);
+                // Util.log(image);
                 let base64Data = image.replace(/^data:image\/png;base64,/, "");
                 fs.exists('reference.png', (err) => {
                     if (!err) {
@@ -31,7 +31,7 @@ export default class SelfTest {
                         });
                     } else {
                         fs.writeFile("compare.png", base64Data, 'base64', function (err) {
-                            console.log('Picture taken. Comparing images...');
+                            Util.log('Picture taken. Comparing images...');
                             let img1 = fs.createReadStream('reference.png').pipe(new PNG()).on('parsed', doneReading);
                             let img2 = fs.createReadStream('compare.png').pipe(new PNG()).on('parsed', doneReading);
                             let filesRead = 0;
@@ -42,7 +42,7 @@ export default class SelfTest {
                                 let px = pixelmatch(img1.data, img2.data, diff.data, img1.width, img1.height, { threshold: 0.8 });
                                 if (px < 10) resolve(true);
                                 else resolve(false);
-                                console.log(px);
+                                Util.log(px);
                                 img1 = null;
                                 img2 = null;
                                 diff.pack().pipe(fs.createWriteStream('diff.png'));
@@ -55,7 +55,7 @@ export default class SelfTest {
             }).catch((err) => {
                 resolve(false);
                 this.cam.stop();
-                console.log(err);
+                Util.log(err);
             });
         });
         //setTimeout(()=>{this.cam.stop();},3000)
@@ -67,7 +67,7 @@ export default class SelfTest {
                 {
                     audio: true,
                     video: true,
-                    maxLength: 10,
+                    maxLength: 5,
                     debug: true
                 });
             this.cam.record().then((videofile) => {
@@ -134,17 +134,26 @@ export default class SelfTest {
                             },
                             "optional": []
                         },
+<<<<<<< HEAD
                     }, this.onMicrophoneGranted.bind(this), this.onMicrophoneDenied.bind(this));
                     resolve(true);
             } catch (e) {
                 alert('getUserMedia threw exception :' + e);
+=======
+                    }, this.onMicrophoneGranted.apply(this,[].push.call(arguments,()=>{
+                        resolve(true);
+                    })), this.onMicrophoneDenied.apply(this,[].push.call(arguments,()=>{resolve(false)})));
+                    
+            } catch (e) {
+                Util.warn('getUserMedia threw exception :' + e);
+>>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
                 resolve(false);
             }
         });
     }
 
     onMicrophoneDenied(e) {
-        console.log(e);
+        Util.log(e);
         //alert('Stream generation failed.');
     }
 
