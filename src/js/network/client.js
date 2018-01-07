@@ -1,8 +1,4 @@
 import * as $ from 'jquery';
-<<<<<<< HEAD
-export default class HttpClient{
-    constructor(){
-=======
 let path = nw.require('path');
 let os = nw.require('os');
 var exec = nw.require('child_process').exec;
@@ -13,7 +9,6 @@ var AdmZip = nw.require('adm-zip');
 
 export default class HttpClient {
     constructor() {
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
         this.checkUrl = 'http://www.tokinomo.com';
         this.baseUrl = 'http://www.monitor.tokinomo.com';
     }
@@ -21,15 +16,9 @@ export default class HttpClient {
     checkConnection() {
         return new Promise((resolve, reject) => {
             $.ajax({
-<<<<<<< HEAD
-                url:this.checkUrl,
-                type:'GET',
-                success:()=>{
-=======
                 url: this.checkUrl,
                 type: 'GET',
                 success: () => {
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
                     resolve();
                 },
                 error: () => {
@@ -39,16 +28,6 @@ export default class HttpClient {
         });
     }
 
-<<<<<<< HEAD
-    post(data){
-        $.ajax({
-            url: this.baseUrl + '/api/index.php/utils/updates',
-            data: data,
-            type: 'POST',
-            contentType: false, // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
-            processData: false, // NEEDED, DON'T OMIT THIS
-            // ... Other options like success and etc
-=======
     postFormData(data) {
         return new Promise((resolve, reject) => {
             $.ajax({
@@ -65,7 +44,6 @@ export default class HttpClient {
                     reject(err);
                 }
             });
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
         });
     }
 

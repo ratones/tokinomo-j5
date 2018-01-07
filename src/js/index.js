@@ -13,6 +13,8 @@ let selftest = new SelfTest();
 let canStartRoutine = false;
 let checkRoutineInterval = null;
 document.querySelector('#btnResetDevice').addEventListener('click', resetDevice);
+document.querySelector('#btnExtend').addEventListener('click', extend);
+document.querySelector('#btnGoHome').addEventListener('click', goHome);
 
 let deviceID = Settings.persistKey('deviceID');
 if(!deviceID){
@@ -22,7 +24,7 @@ if(!deviceID){
 }
 
 client.checkConnection()
-    .then(() => {
+    .catch(() => {
         let status = new DeviceStatus();
         Util.log('Connection established');
         selftest.checkIntegrity().then((result) => {
@@ -36,14 +38,6 @@ client.checkConnection()
             selftest.checkSound()
                 .then((result) => {
                     if (result) {
-<<<<<<< HEAD
-                        console.log('Sound passed!');
-                        status.sound = true;
-                    } else {
-                        console.log('Sound failed!');
-                    }
-                    Arduino.initialize().then(() => {
-=======
                         Util.log('Sound passed!');
                         status.sound = true;
                     } else {
@@ -51,19 +45,10 @@ client.checkConnection()
                     }
                     Arduino.initialize().then(() => {
                         // read movement and voltage from arduino
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
                         Arduino.readVoltage().then((res) => { 
                             status.battery='Volts:'+res.volts+';Amps:'+res.amps;
                         });
                         selftest.record().then((videofile) => {
-<<<<<<< HEAD
-                            // read movement and voltage from arduino board
-                            // Arduino.initialize().then(()=>{
-                            //     Arduino.move(300);
-                            //     Arduino.goHome();
-                            // });
-=======
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
                             //add data to a form and submit
                             let formData = new FormData();
                             formData.append('sound', status.sound);
@@ -72,12 +57,6 @@ client.checkConnection()
                             formData.append('mechanism', 1);
                             formData.append('battery', status.battery);
                             formData.append('activations', '258');
-<<<<<<< HEAD
-                            formData.append('id', '13');
-                            var fileOfBlob = new File([videofile.video], 'Device13.mp4');
-                            formData.append('files', fileOfBlob);
-                            client.post(formData);
-=======
                             formData.append('id', deviceID);
                             let fileOfBlob = new File([videofile.video], 'Device'+deviceID+'.mp4');
                             formData.append('files', fileOfBlob);
@@ -108,7 +87,6 @@ client.checkConnection()
                                 .catch((err)=>{
                                     Util.error(err);
                                 });
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
                         });
                     });
 
@@ -116,24 +94,28 @@ client.checkConnection()
         });
 
     })
-    .catch(() => {
+    .then(() => {
         Util.log('No internet connection');
+        Arduino.initialize().then(() => {
+            alert("Arduino ready!")
+        });
     });
 
 function resetDevice() {
-<<<<<<< HEAD
-    selftest.resetDevice();
-    // Arduino.initialize().then(()=>{
-    //     Arduino.readVoltage().then((res)=>{console.log(res)});
-    //     Arduino.goHome();
-    // });
-=======
     //selftest.resetDevice();
     // Arduino.initialize().then(()=>{
     //     Arduino.readVoltage().then((res)=>{Util.log(res)});
     //     Arduino.goHome();
     // });
-    Arduino.playFile(0);
+    Arduino.extendMax().then(Arduino.bounce.bind(Arduino));
+}
+
+function extend(){
+    Arduino.extendMax();
+}
+
+function goHome(){
+    Arduino.goHome();
 }
 
 function startDevice(){
@@ -147,5 +129,4 @@ function loadFiles(){
     client.downloadMelodies(deviceID).then(()=>{
         canStartRoutine = true;
     });
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
 }

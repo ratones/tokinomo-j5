@@ -29546,105 +29546,97 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-//let five = nw.require('johnny-five');
-var serialport = nw.require('browser-serialport');
+var five = nw.require('johnny-five');
+var SerialPort = nw.require('browser-serialport');
 var fs = nw.require('fs');
-var play = nw.require('play');
+// const play = nw.require('play');
 // const load = nw.require('audio-loader');
 
 var Arduino = function () {
     function Arduino() {
+        var _this = this;
+
         _classCallCheck(this, Arduino);
 
         var player = document.querySelector('#myAudio');
         player.volume = 0.5;
         player.addEventListener('ended', function () {
             console.log('player ended');
+            _this.mutepin.low();
+            _this.isPlaying = false;
+            _this.melodyIndex++;
+            if (_this.melodyIndex >= _this.files.length) _this.melodyIndex = 0;
+            // this.goHome();
         });
+        this.canmove = true;
+        this.motorPosition = 0;
+        this.routineInProgress = false;
         this.player = player;
+        this.melodyIndex = 0;
     }
 
     _createClass(Arduino, [{
+        key: 'detectArduinoPort',
+        value: function detectArduinoPort() {
+            return new Promise(function (resolve) {
+                var p = '';
+                SerialPort.list(function (err, ports) {
+                    ports.forEach(function (port) {
+                        if (port.manufacturer.search('Arduino') != -1) {
+                            resolve(port.comName);
+                        }
+                        console.log(port.comName);
+                        console.log(port.pnpId);
+                        console.log(port.manufacturer);
+                    });
+                    //resolve();
+                });
+            });
+        }
+    }, {
         key: 'initialize',
         value: function initialize() {
+            var _this2 = this;
+
+            var self = this;
             return new Promise(function (resolve, reject) {
-<<<<<<< HEAD
-                _this.board = new five.Board({
-                    port: "COM5",
-                    repl: false
-                });
-
-                _this.board.on("ready", function () {
-                    // this.pinMode(20, this.MODES.OUTPUT);
-
-                    // this.loop(500, () => {
-                    //   // Whatever the last value was, write the opposite
-                    //    //this.digitalWrite(20, this.pins[20].value ? 0 : 1);
-                    //   this.digitalWrite(20,0);
-                    // });
-                    this.stepper = new five.Stepper({
-                        type: five.Stepper.TYPE.DRIVER,
-                        stepsPerRev: 200,
-                        pins: {
-                            step: 4,
-                            dir: 5
-                        }
+                _this2.detectArduinoPort().then(function (com) {
+                    var board = new five.Board({
+                        port: com,
+                        repl: false
                     });
+                    board.on("ready", function () {
+                        self.mutepin = new five.Pin(11);
+                        self.motorpin = new five.Pin(6);
+                        self.ledpin = new five.Pin(20);
+                        self.zeropin = new five.Pin('A0');
+                        self.movepin = new five.Pin('A8');
+                        self.stepper = new five.Stepper({
+                            type: five.Stepper.TYPE.DRIVER,
+                            stepsPerRev: 400,
+                            pins: {
+                                step: 4,
+                                dir: 5
+                            }
+                        });
+                        self.mutepin.low();
+                        self.motorpin.high();
+                        self.zeropin.read(function (error, value) {
+                            self.zeroPinValue = value;
+                            if (value > 800 && !self.routineInProgress) {
+                                self.move(0, 100, 2000, 0, 100);
+                            } else {}
+                            //self.motorPosition = 0;
 
-                    resolve();
-=======
-                serialport.list(function (err, result) {
-                    _util2.default.log(result);
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
+                            //console.log(value);
+                        });
+                        resolve();
+                    });
                 });
-                // this.board = new five.Board({
-                //     port: "COM5",
-                //     repl:false
-                // });
-
-                // this.board.on("ready", function() {
-                //     // this.pinMode(20, this.MODES.OUTPUT);
-
-                //     // this.loop(500, () => {
-                //     //   // Whatever the last value was, write the opposite
-                //     //    //this.digitalWrite(20, this.pins[20].value ? 0 : 1);
-                //     //   this.digitalWrite(20,0);
-                //     // });
-                //     this.stepper = new five.Stepper({
-                //         type: five.Stepper.TYPE.DRIVER,
-                //         stepsPerRev: 200,
-                //         pins: {
-                //           step: 4,
-                //           dir: 5
-                //         }
-                //       });
-
-                //     resolve();
-                //   });
-                resolve();
             });
         }
     }, {
         key: 'readVoltage',
-        value: function readVoltage() {
-            return new Promise(function (resolve) {
-                var volts = '0';
-                var amps = '0';
-                // var pinv = new five.Pin("A1");
-                // var pina = new five.Pin("A9");
-                // pinv.query(function(state) {
-                //     volts = state.value;
-                //     pina.query(function(state) {
-                //         amps = state.value;
-                //         resove({volts,amps});
-                //     });
-                // });  
-                resolve({ volts: volts, amps: amps });
-            });
-        }
-    }, {
-<<<<<<< HEAD
-        key: "readVoltage",
         value: function readVoltage() {
             return new Promise(function (resolve) {
                 var volts = '0';
@@ -29658,17 +29650,112 @@ var Arduino = function () {
                         resove({ volts: volts, amps: amps });
                     });
                 });
+                resolve({ volts: volts, amps: amps });
             });
         }
     }, {
-        key: "move",
-=======
         key: 'move',
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
-        value: function move(steps) {}
+        value: function move(dir, steps, speed, accel, decel) {
+            var _this3 = this;
+
+            return new Promise(function (resolve) {
+                _this3.motorpin.low();
+                _this3.motorIsMoving = true;
+                _this3.stepper.step({
+                    steps: steps,
+                    direction: dir,
+                    rpm: speed,
+                    accel: accel,
+                    decel: decel
+                }, function () {
+                    _this3.motorpin.high();
+                    _this3.motorPosition = dir === 0 ? _this3.motorPosition - steps : _this3.motorPosition + steps;
+                    console.log(_this3.motorPosition);
+                    resolve();
+                    _this3.motorIsMoving = false;
+                });
+            });
+        }
     }, {
         key: 'goHome',
-        value: function goHome() {}
+        value: function goHome() {
+            console.log(this.motorPosition);
+            var self = this;
+            if (self.zeroPinValue < 800) {
+                self.motorPosition = 0;
+                self.routineInProgress = false;
+                return;
+            } else {
+                var pos = void 0;
+                this.motorpin.low();
+                this.stepper.step({
+                    rpm: 700,
+                    direction: 0,
+                    steps: self.motorPosition,
+                    accel: 10000,
+                    decel: 3000
+                }, function () {
+                    self.motorPosition = 0;
+                    // self.zeropin.query((state)=>{
+                    // if(state.value>500){
+                    //     self.forceHome();
+                    // }
+                    // else {
+                    self.motorpin.high();
+                    // self.routineInProgress = false;
+                    // }
+                    // });
+                });
+            }
+            //console.log(value);
+        }
+    }, {
+        key: 'forceHome',
+        value: function forceHome() {
+            this.routineInProgress = false;
+        }
+    }, {
+        key: 'extendMax',
+        value: function extendMax() {
+            var _this4 = this;
+
+            return new Promise(function (resolve) {
+                _this4.listFiles().then(function () {
+                    _this4.isPlaying = true;_this4.playFile(_this4.melodyIndex);
+                });
+                var self = _this4;
+                self.routineInProgress = true;
+                _this4.motorpin.low();
+                _this4.stepper.rpm(800).cw().accel(0).decel(0).step(3350, function () {
+                    self.motorPosition = 3350;
+                    self.motorpin.high();
+                    resolve();
+                });
+            });
+        }
+    }, {
+        key: 'bounce',
+        value: function bounce() {
+            var self = this;
+            var dir = 0;
+            self.move(dir, 1000, 600, 0, 0).then(function () {
+                dir = dir === 0 ? 1 : 0;
+                if (self.isPlaying) {
+                    self.move(dir, 1000, 600, 0, 0).then(function () {
+                        if (self.isPlaying) self.bounce();else self.goHome();
+                    });
+                } else {
+                    self.goHome();
+                }
+            });
+
+            // this.move(0,1000,800,0,0).then(()=>{
+            //     self.move(1,1000,800,0,0).then(()=>{
+            //         runningLoop ++;
+            //         self.motorIsMoving = false;
+            //     });
+            // });
+        }
     }, {
         key: 'listFiles',
         value: function listFiles() {
@@ -29688,6 +29775,7 @@ var Arduino = function () {
     }, {
         key: 'playFile',
         value: function playFile(index) {
+            this.mutepin.high();
             this.player.src = './../' + this.files[index];
             this.player.play();
         }
@@ -29877,6 +29965,8 @@ var selftest = new _index2.default();
 var canStartRoutine = false;
 var checkRoutineInterval = null;
 document.querySelector('#btnResetDevice').addEventListener('click', resetDevice);
+document.querySelector('#btnExtend').addEventListener('click', extend);
+document.querySelector('#btnGoHome').addEventListener('click', goHome);
 
 var deviceID = _settings2.default.persistKey('deviceID');
 if (!deviceID) {
@@ -29885,7 +29975,7 @@ if (!deviceID) {
     deviceID = newID;
 }
 
-client.checkConnection().then(function () {
+client.checkConnection().catch(function () {
     var status = new _status2.default();
     _util2.default.log('Connection established');
     selftest.checkIntegrity().then(function (result) {
@@ -29904,22 +29994,11 @@ client.checkConnection().then(function () {
                 _util2.default.log('Sound failed!');
             }
             _board2.default.initialize().then(function () {
-<<<<<<< HEAD
-=======
                 // read movement and voltage from arduino
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
                 _board2.default.readVoltage().then(function (res) {
                     status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
                 });
                 selftest.record().then(function (videofile) {
-<<<<<<< HEAD
-                    // read movement and voltage from arduino board
-                    // Arduino.initialize().then(()=>{
-                    //     Arduino.move(300);
-                    //     Arduino.goHome();
-                    // });
-=======
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
                     //add data to a form and submit
                     var formData = new FormData();
                     formData.append('sound', status.sound);
@@ -29928,12 +30007,6 @@ client.checkConnection().then(function () {
                     formData.append('mechanism', 1);
                     formData.append('battery', status.battery);
                     formData.append('activations', '258');
-<<<<<<< HEAD
-                    formData.append('id', '13');
-                    var fileOfBlob = new File([videofile.video], 'Device13.mp4');
-                    formData.append('files', fileOfBlob);
-                    client.post(formData);
-=======
                     formData.append('id', deviceID);
                     var fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
                     formData.append('files', fileOfBlob);
@@ -29961,30 +30034,32 @@ client.checkConnection().then(function () {
                     }).catch(function (err) {
                         _util2.default.error(err);
                     });
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
                 });
             });
         });
     });
-}).catch(function () {
+}).then(function () {
     _util2.default.log('No internet connection');
+    _board2.default.initialize().then(function () {
+        alert("Arduino ready!");
+    });
 });
 
 function resetDevice() {
-<<<<<<< HEAD
-    selftest.resetDevice();
-    // Arduino.initialize().then(()=>{
-    //     Arduino.readVoltage().then((res)=>{console.log(res)});
-    //     Arduino.goHome();
-    // });
-=======
     //selftest.resetDevice();
     // Arduino.initialize().then(()=>{
     //     Arduino.readVoltage().then((res)=>{Util.log(res)});
     //     Arduino.goHome();
     // });
-    _board2.default.playFile(0);
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
+    _board2.default.extendMax().then(_board2.default.bounce.bind(_board2.default));
+}
+
+function extend() {
+    _board2.default.extendMax();
+}
+
+function goHome() {
+    _board2.default.goHome();
 }
 
 function startDevice() {
@@ -30053,17 +30128,6 @@ var HttpClient = function () {
             });
         }
     }, {
-<<<<<<< HEAD
-        key: 'post',
-        value: function post(data) {
-            $.ajax({
-                url: this.baseUrl + '/api/index.php/utils/updates',
-                data: data,
-                type: 'POST',
-                contentType: false, // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
-                processData: false // NEEDED, DON'T OMIT THIS
-                // ... Other options like success and etc
-=======
         key: 'postFormData',
         value: function postFormData(data) {
             var _this2 = this;
@@ -30163,7 +30227,6 @@ var HttpClient = function () {
                 } else {
                     // self.run();
                 }
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
             });
         }
     }]);
@@ -30313,12 +30376,8 @@ var SelfTest = function () {
     }, {
         key: 'processAudio',
         value: function processAudio() {
-<<<<<<< HEAD
-            var _this4 = this;
-=======
             var _this4 = this,
                 _arguments = arguments;
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
 
             return new Promise(function (resolve) {
 
@@ -30343,12 +30402,6 @@ var SelfTest = function () {
                             },
                             "optional": []
                         }
-<<<<<<< HEAD
-                    }, _this4.onMicrophoneGranted.bind(_this4), _this4.onMicrophoneDenied.bind(_this4));
-                    resolve(true);
-                } catch (e) {
-                    alert('getUserMedia threw exception :' + e);
-=======
                     }, _this4.onMicrophoneGranted.apply(_this4, [].push.call(_arguments, function () {
                         resolve(true);
                     })), _this4.onMicrophoneDenied.apply(_this4, [].push.call(_arguments, function () {
@@ -30356,7 +30409,6 @@ var SelfTest = function () {
                     })));
                 } catch (e) {
                     _util2.default.warn('getUserMedia threw exception :' + e);
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
                     resolve(false);
                 }
             });

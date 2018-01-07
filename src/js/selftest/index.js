@@ -134,19 +134,12 @@ export default class SelfTest {
                             },
                             "optional": []
                         },
-<<<<<<< HEAD
-                    }, this.onMicrophoneGranted.bind(this), this.onMicrophoneDenied.bind(this));
-                    resolve(true);
-            } catch (e) {
-                alert('getUserMedia threw exception :' + e);
-=======
                     }, this.onMicrophoneGranted.apply(this,[].push.call(arguments,()=>{
                         resolve(true);
                     })), this.onMicrophoneDenied.apply(this,[].push.call(arguments,()=>{resolve(false)})));
                     
             } catch (e) {
                 Util.warn('getUserMedia threw exception :' + e);
->>>>>>> 2fbe38b6a7ac82f2bce74924b34908adc0b67566
                 resolve(false);
             }
         });
