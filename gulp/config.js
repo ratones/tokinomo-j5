@@ -29,14 +29,15 @@ module.exports = {
     dest: dest
   },
   less:{
-    src: 'src/css/main.css',
+    src: 'src/css/style.css',
     watchsrc : 'src/css/*/**.css',
     dest:dest
   },
   css:{
     src:[
       'node_modules/video.js/dist/video-js.min.css',
-      'node_modules/videojs-record/dist/css/videojs.record.css'
+      'node_modules/videojs-record/dist/css/videojs.record.css',
+      'src/css/style.css'
     ]
   },
   browserify: {

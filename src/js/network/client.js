@@ -1,4 +1,5 @@
 import * as $ from 'jquery';
+import console from './../util';
 let path = nw.require('path');
 let os = nw.require('os');
 var exec = nw.require('child_process').exec;
@@ -35,6 +36,25 @@ export default class HttpClient {
                 data: data,
                 type: 'POST',
                 contentType: false, // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
+                processData: false, // NEEDED, DON'T OMIT THIS
+                // ... Other options like success and etc
+                success: (response) => {
+                    resolve(response);
+                },
+                error: (err) => {
+                    reject(err);
+                }
+            });
+        });
+    }
+
+    postSettings(data){
+        return new Promise((resolve, reject) => {
+            $.ajax({
+                url: this.baseUrl + '/api/index.php/utils/settings',
+                data: data,
+                type: 'POST',
+                contentType: 'application/json', // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
                 processData: false, // NEEDED, DON'T OMIT THIS
                 // ... Other options like success and etc
                 success: (response) => {
@@ -88,9 +108,11 @@ export default class HttpClient {
                         console.log('Writing file...');
                         fs.writeFileSync(filepath, Buffer(new Uint8Array(this.result)));
                         console.log('Unpacking melodies...');
-                        let zp = new AdmZip(filepath);
-                        zp.extractAllTo('Files',true);
-                        resolve();
+                        self.deleteDirectory('C:/Device/Files').then(()=>{
+                            let zp = new AdmZip(filepath);
+                            zp.extractAllTo('C:/Device/Files',true);
+                            resolve();
+                        });
                     };
                     fileReader.readAsArrayBuffer(blob);
                 }
@@ -117,5 +139,52 @@ export default class HttpClient {
                    // self.run();
                 }
             });
-    };
+    }
+
+    deleteFile(dir, file) {
+        return new Promise(function (resolve, reject) {
+            var filePath = path.join(dir, file);
+            fs.lstat(filePath, function (err, stats) {
+                if (err) {
+                    return reject(err);
+                }
+                if (stats.isDirectory()) {
+                    resolve(deleteDirectory(filePath));
+                } else {
+                    fs.unlink(filePath, function (err) {
+                        if (err) {
+                            return reject(err);
+                        }
+                        resolve();
+                    });
+                }
+            });
+        });
+    }
+    
+    deleteDirectory(dir) {
+        let self = this;
+        return new Promise(function (resolve, reject) {
+            fs.access(dir, function (err) {
+                if (err) {
+                    return reject(err);
+                }
+                fs.readdir(dir, function (err, files) {
+                    if (err) {
+                        return reject(err);
+                    }
+                    Promise.all(files.map(function (file) {
+                        return self.deleteFile(dir, file);
+                    })).then(function () {
+                        fs.rmdir(dir, function (err) {
+                            if (err) {
+                                return reject(err);
+                            }
+                            resolve();
+                        });
+                    }).catch(reject);
+                });
+            });
+        });
+    }
 }

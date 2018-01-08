@@ -9,6 +9,6 @@ var config = require('../config');
 
 gulp.task('watch', ['setWatch', 'browserSync'], function() {
   gulp.watch(config.markup.src, ['markup','css']);
-  gulp.watch([config.css.watchsrc,config.css.src], ['css']);
+  gulp.watch([config.less.watchsrc,config.less.src], ['css']);
   gulp.watch(config.libs.src, ['libs']);
 });

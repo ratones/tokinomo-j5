@@ -1,8 +1,8 @@
 let five = nw.require('johnny-five');
 let SerialPort = nw.require('browser-serialport');
 let fs = nw.require('fs');
-// const play = nw.require('play');
-// const load = nw.require('audio-loader');
+
+import DeviceSettings from './../board/settings';
 
 import Util from './../util';
 
@@ -159,8 +159,8 @@ class Arduino {
             let self = this;
             self.routineInProgress = true;
             this.motorpin.low();
-            this.stepper.rpm(800).cw().accel(0).decel(0).step(3350, () => {
-                self.motorPosition = 3350;
+            this.stepper.rpm(800).cw().accel(0).decel(0).step(DeviceSettings.RANGE_MAX_POSITION, () => {
+                self.motorPosition = DeviceSettings.RANGE_MAX_POSITION;
                 self.motorpin.high();
                 resolve();
             });
@@ -170,10 +170,11 @@ class Arduino {
     bounce() {
         let self = this;
         let dir = 0;
-        self.move(dir, 1000, 600, 0, 0).then(() => {
+        let steps = DeviceSettings.SWING_MAX_RETRACT;
+        self.move(dir, steps, 600, 0, 0).then(() => {
             dir = dir === 0 ? 1 : 0;
             if (self.isPlaying) {
-                self.move(dir, 1000, 600, 0, 0).then(() => {
+                self.move(dir, steps, 600, 0, 0).then(() => {
                     if (self.isPlaying) self.bounce();
                     else self.goHome();
                 });
@@ -181,16 +182,52 @@ class Arduino {
                 self.goHome();
             }
         });
+    }
+    bounceRandom(){
+        let self = this;
+        let dir = 0;
+        let steps = Math.random()*1000;
+        self.move(dir, steps, 600, 0, 0).then(() => {
+            dir = dir === 0 ? 1 : 0;
+            if (self.isPlaying) {
+                self.move(dir, steps, 600, 0, 0).then(() => {
+                    if (self.isPlaying) self.bounce();
+                    else self.goHome();
+                });
+            }else{
+                self.goHome();
+            }
+        });
+    }
 
+    patternMove(){
+        let patterns = DeviceSettings.getPatterns();
+        let playingFile = this.files[this.melodyIndex];
+        let pattern = patterns.find((p)=>{return p.filename == playingFile });
+        let sets = pattern.pattern;
+        let chain = Promise.resolve();
+        let commands = [];
 
+        for (let index = 0; index < sets.length; index++) {
+            const p = sets[index];
+            let delay = p.pause;
+            let steps = p.distance;
+            let dir = p.distance>=0?1:0;
+            setTimeout(()=>{
+                chain = chain.then(this.mockMove);
+            },delay);
+            //commands.push(this.move.bind(this,dir,steps,600,0,0));
+        }
+        // for(var func in commands){
+        //     chain = chain(func);
+        // }
+        console.log(pattern);
+    }
 
-        // this.move(0,1000,800,0,0).then(()=>{
-        //     self.move(1,1000,800,0,0).then(()=>{
-        //         runningLoop ++;
-        //         self.motorIsMoving = false;
-        //     });
-        // });
-
+    mockMove(dir,steps,speed,accel,decel){
+        return new Promise((resolve)=>{
+            setTimeout(()=>{resolve()},1000);
+        });
     }
 
     listFiles() {
@@ -200,7 +237,7 @@ class Arduino {
             fs.readdir('Files', (err, f) => {
                 f.forEach(file => {
                     console.log(file);
-                    self.files.push('Files/' + file);
+                    self.files.push(file);
                 });
                 resolve();
             });
@@ -210,7 +247,7 @@ class Arduino {
 
     playFile(index) {
         this.mutepin.high()
-        this.player.src = './../' + this.files[index];
+        this.player.src = 'C:/Device/Files/' + this.files[index];
         this.player.play();
     }
 }

@@ -42,7 +42,7 @@ export default class CamHandler{
         video.setAttribute('id', 'myVideo');
         video.classList.add('video-js');
         video.classList.add('vjs-default-skin');
-        document.getElementById('layout').appendChild(video);
+        document.querySelector('.video-control').appendChild(video);
         this.player = videojs("myVideo", {
             controls: true,
             width: 600,
@@ -52,9 +52,9 @@ export default class CamHandler{
         }, function() {
             // print version information at startup
             videojs.log('Using video.js', videojs.VERSION,
-                'with videojs-record', videojs.getPluginVersion('record'),
-                '+ videojs-wavesurfer', videojs.getPluginVersion('wavesurfer'),
-                'and recordrtc', RecordRTC.version);
+            'with videojs-record', videojs.getPluginVersion('record'),
+            '+ videojs-wavesurfer', videojs.getPluginVersion('wavesurfer'),
+            'and recordrtc', RecordRTC.version);
         });
     }
 
@@ -101,12 +101,14 @@ export default class CamHandler{
                 this.player.off('deviceReady');
                 this.player.off('finishedRecord');
                 this.player.off('error');
+                // this.player.record().destroy();
             });
             this.player.on('error', function(error) {
                 reject(error);
                 this.player.off('deviceReady');
                 this.player.off('finishedRecord');
                 this.player.off('error');
+                // this.player.record().destroy();
             });
         });
     }

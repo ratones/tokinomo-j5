@@ -24,16 +24,16 @@ export default class SelfTest {
             this.cam.snapshot().then((image) => {
                 // Util.log(image);
                 let base64Data = image.replace(/^data:image\/png;base64,/, "");
-                fs.exists('reference.png', (err) => {
+                fs.exists('C:/Files/reference.png', (err) => {
                     if (!err) {
-                        fs.writeFile("reference.png", base64Data, 'base64', function (err) {
+                        fs.writeFile("C:/Device/reference.png", base64Data, 'base64', function (err) {
                             resolve(true);
                         });
                     } else {
-                        fs.writeFile("compare.png", base64Data, 'base64', function (err) {
+                        fs.writeFile("C:/Device/compare.png", base64Data, 'base64', function (err) {
                             Util.log('Picture taken. Comparing images...');
-                            let img1 = fs.createReadStream('reference.png').pipe(new PNG()).on('parsed', doneReading);
-                            let img2 = fs.createReadStream('compare.png').pipe(new PNG()).on('parsed', doneReading);
+                            let img1 = fs.createReadStream('C:/Device/reference.png').pipe(new PNG()).on('parsed', doneReading);
+                            let img2 = fs.createReadStream('C:/Device/compare.png').pipe(new PNG()).on('parsed', doneReading);
                             let filesRead = 0;
                             function doneReading() {
                                 if (++filesRead < 2) return;
@@ -45,7 +45,7 @@ export default class SelfTest {
                                 Util.log(px);
                                 img1 = null;
                                 img2 = null;
-                                diff.pack().pipe(fs.createWriteStream('diff.png'));
+                                diff.pack().pipe(fs.createWriteStream('C:/Device/diff.png'));
                             }
                         });
                     }
@@ -72,7 +72,7 @@ export default class SelfTest {
                 });
             this.cam.record().then((videofile) => {
                 resolve(videofile);
-                this.cam.reset();
+                // this.cam.reset();
             });
         });
     }
@@ -102,8 +102,8 @@ export default class SelfTest {
     }
 
     resetDevice() {
-        fs.unlink('reference.png');
-        fs.unlink('compare.png');
+        fs.unlink('C:/Device/reference.png');
+        fs.unlink('C:/Device/compare.png');
     }
 
     processAudio() {
@@ -237,5 +237,9 @@ export default class SelfTest {
         // to the previous sample - take the max here because we
         // want "fast attack, slow release."
         this.volume = Math.max(rms, this.volume * this.averaging);
+    }
+
+    destroyVideo(){
+        this.cam.destroy();
     }
 }

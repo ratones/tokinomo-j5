@@ -29538,6 +29538,10 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
+var _settings = require('./../board/settings');
+
+var _settings2 = _interopRequireDefault(_settings);
+
 var _util = require('./../util');
 
 var _util2 = _interopRequireDefault(_util);
@@ -29549,8 +29553,6 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 var five = nw.require('johnny-five');
 var SerialPort = nw.require('browser-serialport');
 var fs = nw.require('fs');
-// const play = nw.require('play');
-// const load = nw.require('audio-loader');
 
 var Arduino = function () {
     function Arduino() {
@@ -29726,8 +29728,8 @@ var Arduino = function () {
                 var self = _this4;
                 self.routineInProgress = true;
                 _this4.motorpin.low();
-                _this4.stepper.rpm(800).cw().accel(0).decel(0).step(3350, function () {
-                    self.motorPosition = 3350;
+                _this4.stepper.rpm(800).cw().accel(0).decel(0).step(_settings2.default.RANGE_MAX_POSITION, function () {
+                    self.motorPosition = _settings2.default.RANGE_MAX_POSITION;
                     self.motorpin.high();
                     resolve();
                 });
@@ -29738,23 +29740,72 @@ var Arduino = function () {
         value: function bounce() {
             var self = this;
             var dir = 0;
-            self.move(dir, 1000, 600, 0, 0).then(function () {
+            var steps = _settings2.default.SWING_MAX_RETRACT;
+            self.move(dir, steps, 600, 0, 0).then(function () {
                 dir = dir === 0 ? 1 : 0;
                 if (self.isPlaying) {
-                    self.move(dir, 1000, 600, 0, 0).then(function () {
+                    self.move(dir, steps, 600, 0, 0).then(function () {
                         if (self.isPlaying) self.bounce();else self.goHome();
                     });
                 } else {
                     self.goHome();
                 }
             });
+        }
+    }, {
+        key: 'bounceRandom',
+        value: function bounceRandom() {
+            var self = this;
+            var dir = 0;
+            var steps = Math.random() * 1000;
+            self.move(dir, steps, 600, 0, 0).then(function () {
+                dir = dir === 0 ? 1 : 0;
+                if (self.isPlaying) {
+                    self.move(dir, steps, 600, 0, 0).then(function () {
+                        if (self.isPlaying) self.bounce();else self.goHome();
+                    });
+                } else {
+                    self.goHome();
+                }
+            });
+        }
+    }, {
+        key: 'patternMove',
+        value: function patternMove() {
+            var _this5 = this;
 
-            // this.move(0,1000,800,0,0).then(()=>{
-            //     self.move(1,1000,800,0,0).then(()=>{
-            //         runningLoop ++;
-            //         self.motorIsMoving = false;
-            //     });
-            // });
+            var patterns = _settings2.default.getPatterns();
+            var playingFile = this.files[this.melodyIndex];
+            var pattern = patterns.find(function (p) {
+                return p.filename == playingFile;
+            });
+            var sets = pattern.pattern;
+            var chain = Promise.resolve();
+            var commands = [];
+
+            for (var index = 0; index < sets.length; index++) {
+                var p = sets[index];
+                var delay = p.pause;
+                var steps = p.distance;
+                var dir = p.distance >= 0 ? 1 : 0;
+                setTimeout(function () {
+                    chain = chain.then(_this5.mockMove);
+                }, delay);
+                //commands.push(this.move.bind(this,dir,steps,600,0,0));
+            }
+            // for(var func in commands){
+            //     chain = chain(func);
+            // }
+            console.log(pattern);
+        }
+    }, {
+        key: 'mockMove',
+        value: function mockMove(dir, steps, speed, accel, decel) {
+            return new Promise(function (resolve) {
+                setTimeout(function () {
+                    resolve();
+                }, 1000);
+            });
         }
     }, {
         key: 'listFiles',
@@ -29765,7 +29816,7 @@ var Arduino = function () {
                 fs.readdir('Files', function (err, f) {
                     f.forEach(function (file) {
                         console.log(file);
-                        self.files.push('Files/' + file);
+                        self.files.push(file);
                     });
                     resolve();
                 });
@@ -29776,7 +29827,7 @@ var Arduino = function () {
         key: 'playFile',
         value: function playFile(index) {
             this.mutepin.high();
-            this.player.src = './../' + this.files[index];
+            this.player.src = 'C:/Device/Files/' + this.files[index];
             this.player.play();
         }
     }]);
@@ -29786,11 +29837,11 @@ var Arduino = function () {
 
 exports.default = new Arduino();
 
-},{"./../util":14}],9:[function(require,module,exports){
+},{"./../board/settings":9,"./../util":16}],9:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
-  value: true
+    value: true
 });
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -29799,139 +29850,254 @@ var _lodash = require('lodash');
 
 var _ = _interopRequireWildcard(_lodash);
 
+var _client = require('./../network/client');
+
+var _client2 = _interopRequireDefault(_client);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 var DeviceSettings = function () {
-  function DeviceSettings() {
-    _classCallCheck(this, DeviceSettings);
+    function DeviceSettings() {
+        _classCallCheck(this, DeviceSettings);
 
-    this.USE_BLITZ = true;
-    this.BLITZ_DELAY = 0;
-    this.LOOP_PAUSE = 5000;
-    this.PAUSE_BETWEEN_TRACKS = 5000;
-    this.FRAGILE_PRODUCT = false;
-    this.LOOP_COUNT_CONT = 1;
-    this.DIFFERENCE = 5000;
-    this.MOTION_STARTING_DIR = 1;
-    this.WAITING_TIME_DETECT = 1000;
-    this.USE_PATTERN_MOVEMENT = true;
-    this.WAITING_TIME = 5000;
-    this.ALLOWED_DETECTIONS = 2;
-    this.SWING_MAX_RETRACT = 1000;
-    this.KEEP_MOTOR_ON = false;
-    this.RANGE_MAX_POSITION = 3350;
-    this.CONTINUOS_MOVE = true;
-    this.SPEED = 50000;
-    this.ACCELERATION = 90000;
-    this.USE_MOTION_SENSOR = true;
-    this.BLITZ_COUNT = 1;
-    this.RANDOM_PLAY = false;
-    this.USE_RANDOM_MOVEMENT = false;
-    this.USE_BATTERY_RESET = false;
-    this.BATTERY_RESET_INTERVAL = 30000;
-    this.USE_DELAY = false;
-    this.DELAY_INTERVAL = 0;
-    this.USE_CLOCK_RESET = false;
-    this.CLOCK_START_TIME = '2017-06-01T07:00:00.000Z';
-    this.CLOCK_END_TIME = '2017-06-01T09:00:00.000Z';
-    this.UTC_DIFF = 7;
-  }
+        this.FRAGILE_PRODUCT = false;
+        this.SWING_MAX_RETRACT = 1000;
+        this.RANGE_MAX_POSITION = 3350;
+        this.CONTINUOS_MOVE = true;
+        this.USE_MOTION_SENSOR = true;
+        this.RANDOM_PLAY = false;
+        this.USE_CLOCK_RESET = false;
+        this.CLOCK_START_TIME = '2017-06-01T09:00:00.000Z';
+        this.CLOCK_END_TIME = '2017-06-01T22:00:00.000Z';
+        this.UTC_DIFF = 7;
+        this.MOTION_STARTING_DIR = 1;
+        this.KEEP_MOTOR_ON = false;
+        this.SPEED = 50000;
+        this.USE_PATTERN_MOVEMENT = true;
+        this.USE_RANDOM_MOVEMENT = false;
+        this.USE_DELAY = false;
+        this.DELAY_INTERVAL = 0;
+        this.USE_BLITZ = true;
+        this.BLITZ_COUNT = 1;
+        this.BLITZ_DELAY = 0;
+        this.LOOP_PAUSE = 5000;
+        this.PAUSE_BETWEEN_TRACKS = 5000;
+        this.ALLOWED_DETECTIONS = 2;
+        this.WAITING_TIME = 5000;
+        this.LOOP_COUNT_CONT = 1;
+        this.DIFFERENCE = 5000;
+        this.WAITING_TIME_DETECT = 1000;
+        this.ACCELERATION = 90000;
+        // this.USE_BATTERY_RESET = false;
+        // this.BATTERY_RESET_INTERVAL = 30000;
+        document.querySelector('#btnSaveLocal').addEventListener('click', this.saveLocal.bind(this));
+        document.querySelector('#btnSaveServer').addEventListener('click', this.saveServer.bind(this));
+    }
 
-  _createClass(DeviceSettings, [{
-    key: 'saveSettings',
-    value: function saveSettings(settings) {
-      this.deserialize(settings);
-      this.persistKey('deviceSettings', JSON.stringify(this));
-    }
-  }, {
-    key: 'loadSettings',
-    value: function loadSettings() {
-      var settings = this.persistKey('deviceSettings');
-      if (settings) {
-        this.deserializePersistent(JSON.parse(settings));
-      }
-    }
-  }, {
-    key: 'persistKey',
-    value: function persistKey(key, value) {
-      if (!key) return;
-      if (value) {
-        localStorage.setItem(key, value);
-      } else {
-        var v = localStorage.getItem(key);
-        if (!v) return null;else return v;
-      }
-    }
-  }, {
-    key: 'deserialize',
-    value: function deserialize(json) {
-      for (var index = 0; index < json.length; index++) {
-        var prop = json[index];
-        this[prop.name] = prop.val;
-      }
-    }
-  }, {
-    key: 'deserializePersistent',
-    value: function deserializePersistent(json) {
-      var _this = this;
+    _createClass(DeviceSettings, [{
+        key: 'loadPage',
+        value: function loadPage() {
+            document.querySelector('#layout').classList.add('hidden');
+            document.querySelector('.edit-settings').classList.remove('hidden');
+            this.bindValues();
+        }
+    }, {
+        key: 'exit',
+        value: function exit() {
+            document.querySelector('.edit-settings').classList.add('hidden');
+            document.querySelector('#layout').classList.remove('hidden');
+        }
+    }, {
+        key: 'saveSettings',
+        value: function saveSettings(settings) {
+            this.deserialize(settings);
+            this.persistKey('deviceSettings', JSON.stringify(this));
+        }
+    }, {
+        key: 'loadSettings',
+        value: function loadSettings() {
+            var settings = this.persistKey('deviceSettings');
+            if (settings) {
+                this.deserializePersistent(JSON.parse(settings));
+            }
+        }
+    }, {
+        key: 'saveLocal',
+        value: function saveLocal() {
+            var _this = this;
 
-      this.__original__ = _.cloneDeep(json);
-      Object.keys(this.__original__).forEach(function (key) {
-        return _this[key] = json[key];
-      });
-    }
-  }, {
-    key: 'serialize',
-    value: function serialize() {
-      try {
-        return DeviceSettings.serializeObject(this);
-      } catch (e) {
-        throw new Error('Error serializing object [' + this.constructor.name + ']');
-      }
-    }
-  }, {
-    key: 'serializeObject',
-    value: function serializeObject(o) {
-      var _pojo = {};
-      if (o instanceof Map) {
-        o.forEach(function (obj, key) {
-          return _pojo[key] = DeviceSettings.serializeProperty(obj);
-        });
-      } else {
-        Object.keys(o).filter(DeviceSettings.isPropertyForSerialization).forEach(function (key) {
-          return _pojo[key] = DeviceSettings.serializeProperty(o[key]);
-        });
-      }
-      return _pojo;
-    }
-  }, {
-    key: 'serializeProperty',
-    value: function serializeProperty(p) {
-      if (p instanceof DeviceSettings) {
-        return p.serialize();
-      } else if (_.isObject(p)) {
-        return this.serializeObject(p);
-      } else if (_.isArray(p)) {
-        return p.join(',');
-      } else {
-        return isEmpty(p) ? null : p;
-      }
-    }
-  }, {
-    key: 'isPropertyForSerialization',
-    value: function isPropertyForSerialization(propName) {
-      return propName !== 'undefined' && propName !== "isDirtyProp" && !/^__/.test(propName);
-    }
-  }]);
+            var json = {};
+            Object.keys(this).forEach(function (key) {
+                var el = document.querySelector('#' + key);
+                if (el) {
+                    if (el.type == 'checkbox') {
+                        _this[key] = el.checked;
+                    } else {
+                        if (el.id.search('TIME') != -1 && el.id != "WAITING_TIME") {
+                            var dt = new Date();
+                            dt.setHours(el.value.split(':')[0]);
+                            dt.setMinutes(el.value.split(':')[1]);
+                            dt.setSeconds(el.value.split(':')[2]);
+                            //el.value = dt;
+                            // dt.setHours(dt.getHours() + this.UTC_DIFF);
+                            _this[key] = dt;
+                        } else {
+                            _this[key] = el.value;
+                        }
+                    }
+                }
+            });
+            this.persistKey('deviceSettings', JSON.stringify(this));
+        }
+    }, {
+        key: 'saveServer',
+        value: function saveServer() {
+            var _this2 = this;
 
-  return DeviceSettings;
+            var json = {};
+            var client = new _client2.default();
+            Object.keys(this).forEach(function (key) {
+                var el = document.querySelector('#' + key);
+                if (el) {
+                    if (el.type == 'checkbox') {
+                        _this2[key] = el.checked;
+                    } else {
+                        if (el.id.search('TIME') != -1 && el.id != "WAITING_TIME") {
+                            var dt = new Date();
+                            dt.setHours(el.value.split(':')[0]);
+                            dt.setMinutes(el.value.split(':')[1]);
+                            dt.setSeconds(el.value.split(':')[2]);
+                            //el.value = dt;
+                            // dt.setHours(dt.getHours() + this.UTC_DIFF);
+                            _this2[key] = dt;
+                        } else {
+                            _this2[key] = el.value;
+                        }
+                    }
+                }
+            });
+            client.postSettings(JSON.stringify(this));
+        }
+    }, {
+        key: 'bindValues',
+        value: function bindValues() {
+            var _this3 = this;
+
+            this.loadSettings();
+            Object.keys(this).forEach(function (key) {
+                var el = document.querySelector('#' + key);
+                if (el) {
+                    if (el.type == 'checkbox') {
+                        el.checked = _this3[key];
+                    } else {
+                        if (el.id.search('TIME') != -1 && el.id != "WAITING_TIME") {
+                            var dt = new Date(_this3[key]);
+                            //el.value = dt;
+                            // dt.setHours(dt.getHours() + this.UTC_DIFF);
+                            el.value = String('00' + dt.getHours()).slice(-2) + ':' + String('00' + dt.getMinutes()).slice(-2) + ':' + String('00' + dt.getSeconds()).slice(-2);
+                        } else {
+                            el.value = _this3[key];
+                        }
+                    }
+                }
+            });
+        }
+    }, {
+        key: 'getPatterns',
+        value: function getPatterns() {
+            var patterns = this.persistKey('patterns');
+            if (patterns) {
+                return JSON.parse(patterns);
+            }
+        }
+    }, {
+        key: 'savePatterns',
+        value: function savePatterns(data) {
+            this.persistKey('patterns', JSON.stringify(data));
+        }
+    }, {
+        key: 'persistKey',
+        value: function persistKey(key, value) {
+            if (!key) return;
+            if (value) {
+                localStorage.setItem(key, value);
+            } else {
+                var v = localStorage.getItem(key);
+                if (!v) return null;else return v;
+            }
+        }
+    }, {
+        key: 'deserialize',
+        value: function deserialize(json) {
+            for (var index = 0; index < json.length; index++) {
+                var prop = json[index];
+                this[prop.name] = prop.val;
+            }
+        }
+    }, {
+        key: 'deserializePersistent',
+        value: function deserializePersistent(json) {
+            var _this4 = this;
+
+            this.__original__ = _.cloneDeep(json);
+            Object.keys(this.__original__).forEach(function (key) {
+                return _this4[key] = json[key];
+            });
+        }
+    }, {
+        key: 'serialize',
+        value: function serialize() {
+            try {
+                return DeviceSettings.serializeObject(this);
+            } catch (e) {
+                throw new Error('Error serializing object [' + this.constructor.name + ']');
+            }
+        }
+    }, {
+        key: 'serializeObject',
+        value: function serializeObject(o) {
+            var _pojo = {};
+            if (o instanceof Map) {
+                o.forEach(function (obj, key) {
+                    return _pojo[key] = DeviceSettings.serializeProperty(obj);
+                });
+            } else {
+                Object.keys(o).filter(DeviceSettings.isPropertyForSerialization).forEach(function (key) {
+                    return _pojo[key] = DeviceSettings.serializeProperty(o[key]);
+                });
+            }
+            return _pojo;
+        }
+    }, {
+        key: 'serializeProperty',
+        value: function serializeProperty(p) {
+            if (p instanceof DeviceSettings) {
+                return p.serialize();
+            } else if (_.isObject(p)) {
+                return this.serializeObject(p);
+            } else if (_.isArray(p)) {
+                return p.join(',');
+            } else {
+                return isEmpty(p) ? null : p;
+            }
+        }
+    }, {
+        key: 'isPropertyForSerialization',
+        value: function isPropertyForSerialization(propName) {
+            return propName !== 'undefined' && propName !== "isDirtyProp" && !/^__/.test(propName);
+        }
+    }]);
+
+    return DeviceSettings;
 }();
 
 exports.default = new DeviceSettings();
 
-},{"lodash":7}],10:[function(require,module,exports){
+},{"./../network/client":12,"lodash":7}],10:[function(require,module,exports){
 'use strict';
 
 var _index = require('./selftest/index');
@@ -29958,15 +30124,17 @@ var _util = require('./util');
 
 var _util2 = _interopRequireDefault(_util);
 
+var _menu = require('./menu');
+
+var _menu2 = _interopRequireDefault(_menu);
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+var menu = new _menu2.default();
 var client = new _client2.default();
 var selftest = new _index2.default();
 var canStartRoutine = false;
 var checkRoutineInterval = null;
-document.querySelector('#btnResetDevice').addEventListener('click', resetDevice);
-document.querySelector('#btnExtend').addEventListener('click', extend);
-document.querySelector('#btnGoHome').addEventListener('click', goHome);
 
 var deviceID = _settings2.default.persistKey('deviceID');
 if (!deviceID) {
@@ -29975,7 +30143,85 @@ if (!deviceID) {
     deviceID = newID;
 }
 
-client.checkConnection().catch(function () {
+// client.checkConnection()
+//     .catch(() => {
+//         let status = new DeviceStatus();
+//         console.log('Connection established');
+//         selftest.checkIntegrity().then((result) => {
+//             if (result) {
+//                 status.integrity = true;
+//                 console.log('Integrity passed!');
+//             } else {
+//                 console.log('Integrity failed!');
+//             }
+//             // sound check
+//             selftest.checkSound()
+//                 .then((result) => {
+//                     if (result) {
+//                         console.log('Sound passed!');
+//                         status.sound = true;
+//                     } else {
+//                         console.log('Sound failed!');
+//                     }
+//                     Arduino.initialize().then(() => {
+//                         // read movement and voltage from arduino
+//                         Arduino.readVoltage().then((res) => { 
+//                             status.battery='Volts:'+res.volts+';Amps:'+res.amps;
+//                         });
+//                         selftest.record().then((videofile) => {
+//                             //add data to a form and submit
+//                             let formData = new FormData();
+//                             formData.append('sound', status.sound);
+//                             formData.append('product', status.integrity);
+//                             //TODO get data from device!!!
+//                             formData.append('mechanism', 1);
+//                             formData.append('battery', status.battery);
+//                             formData.append('activations', '258');
+//                             formData.append('id', deviceID);
+//                             let fileOfBlob = new File([videofile.video], 'Device'+deviceID+'.mp4');
+//                             formData.append('files', fileOfBlob);
+//                             client.postFormData(formData)
+//                                 .then((response)=>{
+//                                     console.log('Data received from server');
+//                                     //set time and date if received
+//                                     if(response.servertime){
+//                                         // let dt = eval(response.servertime.replace('/',''));
+//                                         // console.log(dt);
+//                                     }
+//                                     //wait for files 
+//                                     loadFiles();
+//                                     Settings.saveSettings(response.settings);
+//                                     if(canStartRoutine){
+//                                         clearInterval(checkRoutineInterval);
+//                                         startDevice();
+//                                     }else{
+//                                         checkRoutineInterval = setInterval(()=>{
+//                                             if(canStartRoutine){
+//                                                 clearInterval(checkRoutineInterval);
+//                                                 startDevice()
+//                                             }
+//                                         },1000);
+//                                     }
+
+//                                 })
+//                                 .catch((err)=>{
+//                                     console.error(err);
+//                                 });
+//                         });
+//                     });
+
+//                 });
+//         });
+
+//     })
+//     .then(() => {
+//         console.log('No internet connection');
+//         Arduino.initialize().then(() => {
+//             alert("Arduino ready!")
+//         });
+//     });
+
+client.checkConnection().then(function () {
     var status = new _status2.default();
     _util2.default.log('Connection established');
     selftest.checkIntegrity().then(function (result) {
@@ -29993,79 +30239,60 @@ client.checkConnection().catch(function () {
             } else {
                 _util2.default.log('Sound failed!');
             }
-            _board2.default.initialize().then(function () {
-                // read movement and voltage from arduino
-                _board2.default.readVoltage().then(function (res) {
-                    status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
-                });
-                selftest.record().then(function (videofile) {
-                    //add data to a form and submit
-                    var formData = new FormData();
-                    formData.append('sound', status.sound);
-                    formData.append('product', status.integrity);
-                    //TODO get data from device!!!
-                    formData.append('mechanism', 1);
-                    formData.append('battery', status.battery);
-                    formData.append('activations', '258');
-                    formData.append('id', deviceID);
-                    var fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
-                    formData.append('files', fileOfBlob);
-                    client.postFormData(formData).then(function (response) {
-                        _util2.default.log('Data received from server');
-                        //set time and date if received
-                        if (response.servertime) {}
-                        // let dt = eval(response.servertime.replace('/',''));
-                        // Util.log(dt);
+            // read movement and voltage from arduino
 
-                        //wait for files 
-                        loadFiles();
-                        _settings2.default.saveSettings(response.settings);
-                        if (canStartRoutine) {
-                            clearInterval(checkRoutineInterval);
-                            startDevice();
-                        } else {
-                            checkRoutineInterval = setInterval(function () {
-                                if (canStartRoutine) {
-                                    clearInterval(checkRoutineInterval);
-                                    startDevice();
-                                }
-                            }, 1000);
-                        }
-                    }).catch(function (err) {
-                        _util2.default.error(err);
-                    });
+            status.battery = 'Volts: 4.998;Amps:225';
+
+            selftest.record().then(function (videofile) {
+                //add data to a form and submit
+                var formData = new FormData();
+                formData.append('sound', status.sound);
+                formData.append('product', status.integrity);
+                //TODO get data from device!!!
+                formData.append('mechanism', 1);
+                formData.append('battery', status.battery);
+                formData.append('activations', '258');
+                formData.append('id', deviceID);
+                var fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
+                formData.append('files', fileOfBlob);
+                client.postFormData(formData).then(function (response) {
+                    _util2.default.log('Data received from server');
+                    //destroy video control
+                    selftest.destroyVideo();
+                    //set time and date if received
+                    if (response.servertime) {}
+                    // let dt = eval(response.servertime.replace('/',''));
+                    // console.log(dt);
+
+                    //wait for files 
+                    loadFiles();
+                    _settings2.default.saveSettings(response.settings);
+                    _settings2.default.savePatterns(response.patterns);
+                    if (canStartRoutine) {
+                        clearInterval(checkRoutineInterval);
+                        startDevice();
+                    } else {
+                        checkRoutineInterval = setInterval(function () {
+                            if (canStartRoutine) {
+                                clearInterval(checkRoutineInterval);
+                                startDevice();
+                            }
+                        }, 1000);
+                    }
+                }).catch(function (err) {
+                    _util2.default.error(err);
                 });
             });
         });
     });
-}).then(function () {
+}).catch(function () {
     _util2.default.log('No internet connection');
-    _board2.default.initialize().then(function () {
-        alert("Arduino ready!");
-    });
 });
-
-function resetDevice() {
-    //selftest.resetDevice();
-    // Arduino.initialize().then(()=>{
-    //     Arduino.readVoltage().then((res)=>{Util.log(res)});
-    //     Arduino.goHome();
-    // });
-    _board2.default.extendMax().then(_board2.default.bounce.bind(_board2.default));
-}
-
-function extend() {
-    _board2.default.extendMax();
-}
-
-function goHome() {
-    _board2.default.goHome();
-}
 
 function startDevice() {
     _util2.default.info('Device started on' + new Date());
     _board2.default.listFiles().then(function () {
-        _board2.default.playFile(0);
+        _board2.default.patternMove();
     });
 }
 
@@ -30075,7 +30302,83 @@ function loadFiles() {
     });
 }
 
-},{"./board/board":8,"./board/settings":9,"./network/client":11,"./selftest/index":12,"./selftest/status":13,"./util":14}],11:[function(require,module,exports){
+},{"./board/board":8,"./board/settings":9,"./menu":11,"./network/client":12,"./selftest/index":14,"./selftest/status":15,"./util":16}],11:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+
+var _devicetest = require('./selftest/devicetest');
+
+var _devicetest2 = _interopRequireDefault(_devicetest);
+
+var _settings = require('./board/settings');
+
+var _settings2 = _interopRequireDefault(_settings);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Menu = function Menu() {
+    var _this = this;
+
+    _classCallCheck(this, Menu);
+
+    this.test = new _devicetest2.default();
+    var menu = new nw.Menu({ type: 'menubar' });
+
+    // Create a submenu as the 2nd level menu
+    var appmenu = new nw.Menu();
+    appmenu.append(new nw.MenuItem({ label: 'Preferences' }));
+    appmenu.append(new nw.MenuItem({
+        label: 'Exit', click: function click() {}
+    }));
+
+    var devicemenu = new nw.Menu();
+    devicemenu.append(new nw.MenuItem({
+        label: 'Test mode', click: function click() {
+            _this.test.enterTestMode();
+        }
+    }));
+    devicemenu.append(new nw.MenuItem({
+        label: 'Start Routine', click: function click() {
+            _this.test.startRoutine();
+        }
+    }));
+    devicemenu.append(new nw.MenuItem({
+        label: 'Stop Routine', click: function click() {
+            _this.test.stopRoutine();
+        }
+    }));
+    devicemenu.append(new nw.MenuItem({
+        label: 'Device settings', click: function click() {
+            _settings2.default.loadPage();
+        }
+    }));
+    devicemenu.append(new nw.MenuItem({
+        label: 'Device status', click: function click() {
+            _settings2.default.exit();
+        }
+    }));
+    // Create and append the 1st level menu to the menubar
+    menu.append(new nw.MenuItem({
+        label: 'Application',
+        submenu: appmenu
+    }));
+    menu.append(new nw.MenuItem({
+        label: 'Device',
+        submenu: devicemenu
+    }));
+
+    // Assign it to `window.menu` to get the menu displayed
+    nw.Window.get().menu = menu;
+};
+
+exports.default = Menu;
+
+},{"./board/settings":9,"./selftest/devicetest":13}],12:[function(require,module,exports){
 (function (process,Buffer){
 'use strict';
 
@@ -30088,6 +30391,12 @@ var _createClass = function () { function defineProperties(target, props) { for 
 var _jquery = require('jquery');
 
 var $ = _interopRequireWildcard(_jquery);
+
+var _util = require('./../util');
+
+var _util2 = _interopRequireDefault(_util);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
@@ -30150,13 +30459,35 @@ var HttpClient = function () {
             });
         }
     }, {
-        key: 'getFiles',
-        value: function getFiles(id) {
+        key: 'postSettings',
+        value: function postSettings(data) {
             var _this3 = this;
 
             return new Promise(function (resolve, reject) {
                 $.ajax({
-                    url: _this3.baseUrl + '/api/index.php/utils/melody/' + id,
+                    url: _this3.baseUrl + '/api/index.php/utils/settings',
+                    data: data,
+                    type: 'POST',
+                    contentType: 'application/json', // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
+                    processData: false, // NEEDED, DON'T OMIT THIS
+                    // ... Other options like success and etc
+                    success: function success(response) {
+                        resolve(response);
+                    },
+                    error: function error(err) {
+                        reject(err);
+                    }
+                });
+            });
+        }
+    }, {
+        key: 'getFiles',
+        value: function getFiles(id) {
+            var _this4 = this;
+
+            return new Promise(function (resolve, reject) {
+                $.ajax({
+                    url: _this4.baseUrl + '/api/index.php/utils/melody/' + id,
                     type: 'GET',
                     success: function success(response) {
                         if (response == 'noupdates') {
@@ -30176,13 +30507,13 @@ var HttpClient = function () {
     }, {
         key: 'downloadMelodies',
         value: function downloadMelodies(id) {
-            var _this4 = this;
+            var _this5 = this;
 
             return new Promise(function (resolve, reject) {
 
-                var self = _this4;
+                var self = _this5;
                 var xhr = new XMLHttpRequest();
-                xhr.open('GET', _this4.baseUrl + '/api/index.php/utils/melody/' + id, true);
+                xhr.open('GET', _this5.baseUrl + '/api/index.php/utils/melody/' + id, true);
                 xhr.responseType = 'blob';
 
                 xhr.onload = function (e) {
@@ -30195,14 +30526,16 @@ var HttpClient = function () {
                         var blob = this.response;
                         var fileReader = new FileReader();
                         var filepath = path.join(os.tmpdir(), 'test.zip');
-                        console.log(os.tmpdir());
+                        _util2.default.log(os.tmpdir());
                         fileReader.onload = function () {
-                            console.log('Writing file...');
+                            _util2.default.log('Writing file...');
                             fs.writeFileSync(filepath, Buffer(new Uint8Array(this.result)));
-                            console.log('Unpacking melodies...');
-                            var zp = new AdmZip(filepath);
-                            zp.extractAllTo('Files', true);
-                            resolve();
+                            _util2.default.log('Unpacking melodies...');
+                            self.deleteDirectory('C:/Device/Files').then(function () {
+                                var zp = new AdmZip(filepath);
+                                zp.extractAllTo('C:/Device/Files', true);
+                                resolve();
+                            });
                         };
                         fileReader.readAsArrayBuffer(blob);
                     }
@@ -30229,6 +30562,55 @@ var HttpClient = function () {
                 }
             });
         }
+    }, {
+        key: 'deleteFile',
+        value: function deleteFile(dir, file) {
+            return new Promise(function (resolve, reject) {
+                var filePath = path.join(dir, file);
+                fs.lstat(filePath, function (err, stats) {
+                    if (err) {
+                        return reject(err);
+                    }
+                    if (stats.isDirectory()) {
+                        resolve(deleteDirectory(filePath));
+                    } else {
+                        fs.unlink(filePath, function (err) {
+                            if (err) {
+                                return reject(err);
+                            }
+                            resolve();
+                        });
+                    }
+                });
+            });
+        }
+    }, {
+        key: 'deleteDirectory',
+        value: function deleteDirectory(dir) {
+            var self = this;
+            return new Promise(function (resolve, reject) {
+                fs.access(dir, function (err) {
+                    if (err) {
+                        return reject(err);
+                    }
+                    fs.readdir(dir, function (err, files) {
+                        if (err) {
+                            return reject(err);
+                        }
+                        Promise.all(files.map(function (file) {
+                            return self.deleteFile(dir, file);
+                        })).then(function () {
+                            fs.rmdir(dir, function (err) {
+                                if (err) {
+                                    return reject(err);
+                                }
+                                resolve();
+                            });
+                        }).catch(reject);
+                    });
+                });
+            });
+        }
     }]);
 
     return HttpClient;
@@ -30237,7 +30619,148 @@ var HttpClient = function () {
 exports.default = HttpClient;
 
 }).call(this,require('_process'),require("buffer").Buffer)
-},{"_process":2,"buffer":3,"jquery":6}],12:[function(require,module,exports){
+},{"./../util":16,"_process":2,"buffer":3,"jquery":6}],13:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _jquery = require('jquery');
+
+var $ = _interopRequireWildcard(_jquery);
+
+function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var fs = nw.require('fs');
+
+var DeviceTest = function () {
+    function DeviceTest() {
+        _classCallCheck(this, DeviceTest);
+
+        this.stepsCtl = document.querySelector('#steps');
+        this.dirCtl = document.querySelector('#direction');
+        this.speedCtl = document.querySelector('#speed');
+        this.ledStatusCtl = document.querySelector('#ledstatus');
+        this.addListeners();
+        this.loadAudioFiles();
+    }
+
+    _createClass(DeviceTest, [{
+        key: 'addListeners',
+        value: function addListeners() {
+            document.querySelector('#btnResetDevice').addEventListener('click', this.resetDevice.bind(this));
+            document.querySelector('#btnMove').addEventListener('click', this.moveCustomMotor.bind(this));
+            document.querySelector('#btnExtend').addEventListener('click', this.extendMotor.bind(this));
+            document.querySelector('#btnGoHome').addEventListener('click', this.goHomeMotor.bind(this));
+            document.querySelector('#btnBounceEven').addEventListener('click', this.bounceEvenMotor.bind(this));
+            document.querySelector('#btnBounceRandom').addEventListener('click', this.bounceRandomMotor.bind(this));
+
+            document.querySelector('#checkstatus').addEventListener('change', this.ledCheck.bind(this));
+        }
+    }, {
+        key: 'loadAudioFiles',
+        value: function loadAudioFiles() {
+            var audioSel = document.querySelector('#audioSelect');
+            audioSel.addEventListener('change', function () {
+                document.querySelector('#myAudio').src = audioSel.value;
+            });
+            audioSel.innerHTML = '';
+            fs.readdir('Files', function (err, f) {
+                f.forEach(function (file) {
+                    var opt = document.createElement('option');
+                    opt.value = 'C:/Device/Files/' + file;
+                    opt.innerHTML = file;
+                    audioSel.appendChild(opt);
+                });
+            });
+        }
+    }, {
+        key: 'enterTestMode',
+        value: function enterTestMode() {
+            this.stopRoutine();
+            this.enableControls();
+        }
+    }, {
+        key: 'stopRoutine',
+        value: function stopRoutine() {}
+    }, {
+        key: 'startRoutine',
+        value: function startRoutine() {
+            this.disableControls();
+        }
+    }, {
+        key: 'enableControls',
+        value: function enableControls() {
+            // document.querySelector('.device-audio').removeEventListener('click',this.disableAudio);
+            document.querySelectorAll('.device-test').forEach(function (cont) {
+                cont.classList.remove('disabled');
+                cont.childNodes.forEach(function (el) {
+                    if (el.tagName == 'INPUT' || el.tagName == 'BUTTON' || el.tagName == 'SELECT') {
+                        el.removeAttribute('disabled');
+                    }
+                });
+            });
+            // $('.device')('input,button').attr('disabled',null);
+        }
+    }, {
+        key: 'disableControls',
+        value: function disableControls() {
+            document.querySelector('#myAudio').src = null;
+            document.querySelectorAll('.device-test').forEach(function (cont) {
+                cont.classList.add('disabled');
+                cont.childNodes.forEach(function (el) {
+                    if (el.tagName == 'INPUT' || el.tagName == 'BUTTON' || el.tagName == 'SELECT') {
+                        el.setAttribute('disabled', 'disabled');
+                    }
+                });
+            });
+        }
+    }, {
+        key: 'disableAudio',
+        value: function disableAudio(e) {
+            e.stopPropagation();
+        }
+    }, {
+        key: 'resetDevice',
+        value: function resetDevice() {}
+    }, {
+        key: 'moveCustomMotor',
+        value: function moveCustomMotor() {}
+    }, {
+        key: 'extendMotor',
+        value: function extendMotor() {}
+    }, {
+        key: 'goHomeMotor',
+        value: function goHomeMotor() {}
+    }, {
+        key: 'bounceEvenMotor',
+        value: function bounceEvenMotor() {}
+    }, {
+        key: 'bounceRandomMotor',
+        value: function bounceRandomMotor() {}
+    }, {
+        key: 'ledCheck',
+        value: function ledCheck(e) {
+            var chk = e.target;
+            console.log(chk.checked);
+            var rclass = chk.checked ? 'red' : 'green';
+            var aclass = chk.checked ? 'green' : 'red';
+            this.ledStatusCtl.classList.remove(rclass);
+            this.ledStatusCtl.classList.add(aclass);
+        }
+    }]);
+
+    return DeviceTest;
+}();
+
+exports.default = DeviceTest;
+
+},{"jquery":6}],14:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -30288,16 +30811,16 @@ var SelfTest = function () {
                 _this.cam.snapshot().then(function (image) {
                     // Util.log(image);
                     var base64Data = image.replace(/^data:image\/png;base64,/, "");
-                    fs.exists('reference.png', function (err) {
+                    fs.exists('C:/Files/reference.png', function (err) {
                         if (!err) {
-                            fs.writeFile("reference.png", base64Data, 'base64', function (err) {
+                            fs.writeFile("C:/Device/reference.png", base64Data, 'base64', function (err) {
                                 resolve(true);
                             });
                         } else {
-                            fs.writeFile("compare.png", base64Data, 'base64', function (err) {
+                            fs.writeFile("C:/Device/compare.png", base64Data, 'base64', function (err) {
                                 _util2.default.log('Picture taken. Comparing images...');
-                                var img1 = fs.createReadStream('reference.png').pipe(new PNG()).on('parsed', doneReading);
-                                var img2 = fs.createReadStream('compare.png').pipe(new PNG()).on('parsed', doneReading);
+                                var img1 = fs.createReadStream('C:/Device/reference.png').pipe(new PNG()).on('parsed', doneReading);
+                                var img2 = fs.createReadStream('C:/Device/compare.png').pipe(new PNG()).on('parsed', doneReading);
                                 var filesRead = 0;
                                 function doneReading() {
                                     if (++filesRead < 2) return;
@@ -30308,7 +30831,7 @@ var SelfTest = function () {
                                     _util2.default.log(px);
                                     img1 = null;
                                     img2 = null;
-                                    diff.pack().pipe(fs.createWriteStream('diff.png'));
+                                    diff.pack().pipe(fs.createWriteStream('C:/Device/diff.png'));
                                 }
                             });
                         }
@@ -30337,7 +30860,7 @@ var SelfTest = function () {
                 });
                 _this2.cam.record().then(function (videofile) {
                     resolve(videofile);
-                    _this2.cam.reset();
+                    // this.cam.reset();
                 });
             });
         }
@@ -30370,8 +30893,8 @@ var SelfTest = function () {
     }, {
         key: 'resetDevice',
         value: function resetDevice() {
-            fs.unlink('reference.png');
-            fs.unlink('compare.png');
+            fs.unlink('C:/Device/reference.png');
+            fs.unlink('C:/Device/compare.png');
         }
     }, {
         key: 'processAudio',
@@ -30508,6 +31031,11 @@ var SelfTest = function () {
             // want "fast attack, slow release."
             this.volume = Math.max(rms, this.volume * this.averaging);
         }
+    }, {
+        key: 'destroyVideo',
+        value: function destroyVideo() {
+            this.cam.destroy();
+        }
     }]);
 
     return SelfTest;
@@ -30515,7 +31043,7 @@ var SelfTest = function () {
 
 exports.default = SelfTest;
 
-},{"../webcam/camhandler":15,"./../util":14}],13:[function(require,module,exports){
+},{"../webcam/camhandler":17,"./../util":16}],15:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -30536,8 +31064,8 @@ var DeviceStatus = function DeviceStatus() {
 
 exports.default = DeviceStatus;
 
-},{}],14:[function(require,module,exports){
-"use strict";
+},{}],16:[function(require,module,exports){
+'use strict';
 
 Object.defineProperty(exports, "__esModule", {
     value: true
@@ -30547,39 +31075,70 @@ var _createClass = function () { function defineProperties(target, props) { for 
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var Util = function () {
-    function Util() {
-        _classCallCheck(this, Util);
+var console = function () {
+    function console() {
+        _classCallCheck(this, console);
+
+        this.console = document.querySelector('#deviceLog');
     }
 
-    _createClass(Util, [{
-        key: "log",
+    _createClass(console, [{
+        key: 'log',
         value: function log(data) {
-            console.log(data);
+            window.console.log(data);
+            var node = document.createElement('div');
+            node.innerText = data;
+            this.console.appendChild(node);
+            this.cleanup();
         }
     }, {
-        key: "warn",
+        key: 'warn',
         value: function warn(data) {
-            console.warn(data);
+            window.console.warn(data);
+            var node = document.createElement('div');
+            node.style.color = 'orange';
+            node.innerText = data;
+            this.console.appendChild(node);
+            this.cleanup();
+            // this.console.value += '<span color="orange">' + data + '</span><br>';
         }
     }, {
-        key: "error",
+        key: 'error',
         value: function error(data) {
-            console.error(data);
+            window.console.error(data);
+            var node = document.createElement('div');
+            node.style.color = 'red';
+            node.innerText = data;
+            this.console.appendChild(node);
+            this.cleanup();
+            // this.console.value += '<span color="red">' + data + '</span><br>';
         }
     }, {
-        key: "info",
+        key: 'info',
         value: function info(data) {
-            console.info(data);
+            window.console.info(data);
+            var node = document.createElement('div');
+            node.style.color = 'blue';
+            node.innerText = data;
+            this.console.appendChild(node);
+            this.cleanup();
+            // this.console.value += '<span color="blue">' + data + '</span><br>';
+        }
+    }, {
+        key: 'cleanup',
+        value: function cleanup() {
+            if (this.console.childNodes.length > 50) {
+                this.console.removeChild(this.console.childNodes[0]);
+            }
         }
     }]);
 
-    return Util;
+    return console;
 }();
 
-exports.default = new Util();
+exports.default = new console();
 
-},{}],15:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -30641,7 +31200,7 @@ var CamHandler = function () {
             video.setAttribute('id', 'myVideo');
             video.classList.add('video-js');
             video.classList.add('vjs-default-skin');
-            document.getElementById('layout').appendChild(video);
+            document.querySelector('.video-control').appendChild(video);
             this.player = videojs("myVideo", {
                 controls: true,
                 width: 600,
@@ -30712,12 +31271,14 @@ var CamHandler = function () {
                     _this2.player.off('deviceReady');
                     _this2.player.off('finishedRecord');
                     _this2.player.off('error');
+                    // this.player.record().destroy();
                 });
                 _this2.player.on('error', function (error) {
                     reject(error);
                     this.player.off('deviceReady');
                     this.player.off('finishedRecord');
                     this.player.off('error');
+                    // this.player.record().destroy();
                 });
             });
         }
@@ -30728,4 +31289,4 @@ var CamHandler = function () {
 
 exports.default = CamHandler;
 
-},{"./../util":14}]},{},[10]);
+},{"./../util":16}]},{},[10]);

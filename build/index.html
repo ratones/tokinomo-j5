@@ -5,32 +5,203 @@
   <meta charset="utf-8">
   <title>Test KUI</title>
   <link rel="stylesheet" type="text/css" href="bundle.css">
-  <script type="text/javascript" src="bundles.js" ></script>
+  <script type="text/javascript" src="bundles.js"></script>
 
 </head>
 
 <body>
-   <style type="text/css">
-    /* Dropdown Button */
-    body,html,#layout{
-      width:100%;
-      height:100%;
-      margin:0;
-      padding:0;
-    }
-    .small{
-      width:30px;
-    }
-
-
-  </style>
   <div id="layout">
-    <div style="width:500px"><video id="myVideo" class="video-js vjs-default-skin"></video></div>
-     <div><audio id="myAudio" src="./../Files/melody1.mp3" controls></audio></div>
-    <div><button id="btnResetDevice" >Bounce</button></div>
-    <div><button id="btnExtend" >Extend</button></div>
-    <div><button id="btnGoHome" >Go home</button></div>
+    <fieldset>
+      <legend>Device status</legend>
+      <div class="device-status">
+        <div class="video-control">
+          <video id="myVideo" class="video-js vjs-default-skin"></video>
+        </div>
+        <div class="device-logging">
+          <div id="deviceLog"></div>
+        </div>
+    </fieldset>
+    <hr>
+
+    <fieldset>
+      <legend>Device test</legend>
+      <div class="device-test">
+        <button class="btn" id="btnResetDevice">Reset device</button>
+        <fieldset>
+          <legend>Movement</legend>
+          <div class="device-movement">
+            <div class="movement-commands">
+              <fieldset class="device-test">
+                <legend>Routine movements</legend>
+                <button class="btn" id="btnExtend">Extend</button>
+                <button class="btn" id="btnGoHome">Go home</button>
+                <button class="btn" id="btnBounceEven">Bounce even</button>
+                <button class="btn" id="btnBounceRandom">Bounce random</button>
+              </fieldset>
+            </div>
+            <div class="movement-settings">
+              <fieldset class="device-test">
+                <legend>Custom move</legend>
+                <label for="speed">Speed:</label>
+                <select name="speed" id="speed" value="medium">
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+                <label for="direction">Direction:</label>
+                <select name="direction" id="direction" value="1">
+                  <option value="1">Forward</option>
+                  <option value="0">Backward</option>
+                </select>
+                <label for="steps">Steps:</label>
+                <input type="text" id="steps" name="steps" />
+                <button id="btnMove">Move!</button>
+              </fieldset>
+            </div>
+          </div>
+        </fieldset>
+        <fieldset >
+          <legend>Device LED</legend>
+          <div class="device-led device-test">
+            <label for="checkstatus">On/Off:</label>
+            <input type="checkbox" name="checkstatus" id="checkstatus" />
+            <label>LED status:</label>
+            <div class="led-status" id="ledstatus"></div>
+          </div>
+        </fieldset>
+
+        <fieldset class="device-test">
+          <legend>Device audio files</legend>
+          <div class="device-audio device-test">
+            <audio id="myAudio" src="C:/Device/Files/melody1.mp3" controls disabled></audio>
+            <label for="audioSelect">Select file:</label>
+            <select id="audioSelect"></select>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Device Real Time Clock</legend>
+          <div class="device-rtc device-test">
+            <button id="btnReadRTC" class="btn">Read RTC</button>
+            <label id="rtcread"></label>
+            <button id="btnWriteRTC" class="btn">Write RTC(system date time!!!)</button>
+          </div>
+        </fieldset>
+      </div>
+    </fieldset>
   </div>
-  <script type="text/javascript" src="./app.js"></script>
+  <div class="edit-settings hidden" >
+      <fieldset>
+          <legend>General</legend>
+          <div>
+              <label>Fragile product:</label>
+              <input type="checkbox" id="FRAGILE_PRODUCT" />
+          </div>
+          <div>
+              <label>Swing amplitude:</label>
+              <input type="text" id="SWING_MAX_RETRACT" />
+          </div>
+          <div>
+              <label>Range max:</label>
+              <input type="text" id="RANGE_MAX_POSITION" />
+          </div>
+          <div>
+              <label>Continuos move:</label>
+              <input type="checkbox" id="CONTINUOS_MOVE" />
+          </div>
+          <div>
+              <label>Use motion sensor:</label>
+              <input type="checkbox" id="USE_MOTION_SENSOR" />
+          </div>
+          <div>
+              <label>Random play:</label>
+              <input type="checkbox" id="RANDOM_PLAY" />
+          </div>
+          <div>
+              <label>Use clock reset:</label>
+              <input type="checkbox" id="USE_CLOCK_RESET" />
+          </div>
+          <div>
+              <label>Clock start:</label>
+              <input type="text" id="CLOCK_START_TIME" />
+          </div>
+          <div>
+              <label>Clock end:</label>
+              <input type="text" id="CLOCK_END_TIME" />
+          </div>
+          <div>
+              <label>UTC diff:</label>
+              <input type="text" id="UTC_DIFF" />
+          </div>
+      </fieldset>
+      <fieldset>
+          <legend>Motor</legend>
+          <div>
+              <label>Start direction:</label>
+              <select name="direction" id="MOTION_STARTING_DIR" value="1">
+                  <option value="1">Forward</option>
+                  <option value="0">Backward</option>
+              </select>
+          </div>
+          <div>
+              <label>Keep on:</label>
+              <input type="checkbox" id="KEEP_MOTOR_ON" />
+          </div>
+          <div>
+              <label>Speed:</label>
+              <select name="speed" id="SPEED" value="medium">
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+              </select>
+          </div>
+      </fieldset>
+      <fieldset>
+          <legend>Movement</legend>
+          <div>
+              <label>Use pattern:</label>
+              <input type="checkbox" id="USE_PATTERN_MOVEMENT" />
+          </div>
+          <div>
+              <label>Use random:</label>
+              <input type="checkbox" id="USE_RANDOM_MOVEMENT" />
+          </div>
+          <div>
+              <label>Use delay:</label>
+              <input type="checkbox" id="USE_DELAY" />
+          </div>
+          <div>
+              <label>Delay value:</label>
+              <input type="text" id="DELAY_INTERVAL" />
+          </div>
+      </fieldset>
+      <fieldset>
+          <legend>LED</legend>
+          <div>
+              <label>Use light:</label>
+              <input type="checkbox" id="USE_BLITZ" />
+          </div>
+          <div>
+              <label>Light count:</label>
+              <input type="text" id="BLITZ_COUNT" />
+          </div>
+          <div>
+              <label>Light delay(ms):</label>
+              <input type="text" id="BLITZ_DELAY" />
+          </div>
+      </fieldset>
+      <fieldset>
+          <legend>Detection</legend>
+          <div>
+              <label>Pause between(ms):</label>
+              <input type="text" id="WAITING_TIME" />
+          </div>
+      </fieldset>
+      <div class="settings-buttons">
+          <button id="btnSaveLocal">Save Local</button>
+          <button id="btnSaveServer">Save Server</button>
+        </div>
+  </div>
+    <script type="text/javascript" src="./app.js"></script>
 </body>
+
 </html>
