@@ -29568,9 +29568,10 @@ var Arduino = function () {
             _this.isPlaying = false;
             _this.melodyIndex++;
             if (_this.melodyIndex >= _this.files.length) _this.melodyIndex = 0;
-            // this.goHome();
+            if (_this.canGoHome) _this.goHome();
         });
-        this.canmove = true;
+        this.canGoHome = false;
+        this.isMoving = true;
         this.motorPosition = 0;
         this.routineInProgress = false;
         this.player = player;
@@ -29584,12 +29585,9 @@ var Arduino = function () {
                 var p = '';
                 SerialPort.list(function (err, ports) {
                     ports.forEach(function (port) {
-                        if (port.manufacturer.search('Arduino') != -1) {
+                        if (port.comName != 'COM1') {
                             resolve(port.comName);
                         }
-                        console.log(port.comName);
-                        console.log(port.pnpId);
-                        console.log(port.manufacturer);
                     });
                     //resolve();
                 });
@@ -29602,11 +29600,13 @@ var Arduino = function () {
 
             var self = this;
             return new Promise(function (resolve, reject) {
+                _this2.listFiles();
                 _this2.detectArduinoPort().then(function (com) {
                     var board = new five.Board({
                         port: com,
                         repl: false
                     });
+                    _this2.board = board;
                     board.on("ready", function () {
                         self.mutepin = new five.Pin(11);
                         self.motorpin = new five.Pin(6);
@@ -29625,13 +29625,14 @@ var Arduino = function () {
                         self.motorpin.high();
                         self.zeropin.read(function (error, value) {
                             self.zeroPinValue = value;
-                            if (value > 800 && !self.routineInProgress) {
+                            if (value > 500 && !self.routineInProgress) {
                                 self.move(0, 100, 2000, 0, 100);
                             } else {}
                             //self.motorPosition = 0;
 
                             //console.log(value);
                         });
+
                         resolve();
                     });
                 });
@@ -29661,7 +29662,7 @@ var Arduino = function () {
             var _this3 = this;
 
             return new Promise(function (resolve) {
-                _this3.motorpin.low();
+                // this.motorpin.low();
                 _this3.motorIsMoving = true;
                 _this3.stepper.step({
                     steps: steps,
@@ -29670,9 +29671,9 @@ var Arduino = function () {
                     accel: accel,
                     decel: decel
                 }, function () {
-                    _this3.motorpin.high();
+                    // this.motorpin.high();
                     _this3.motorPosition = dir === 0 ? _this3.motorPosition - steps : _this3.motorPosition + steps;
-                    console.log(_this3.motorPosition);
+                    // console.log(this.motorPosition);
                     resolve();
                     _this3.motorIsMoving = false;
                 });
@@ -29704,7 +29705,9 @@ var Arduino = function () {
                     // }
                     // else {
                     self.motorpin.high();
-                    // self.routineInProgress = false;
+                    self.lightOff();
+                    self.routineInProgress = false;
+                    self.canGoHome = false; // for pattern movement
                     // }
                     // });
                 });
@@ -29722,15 +29725,13 @@ var Arduino = function () {
             var _this4 = this;
 
             return new Promise(function (resolve) {
-                _this4.listFiles().then(function () {
-                    _this4.isPlaying = true;_this4.playFile(_this4.melodyIndex);
-                });
+                // this.listFiles().then(() => { this.isPlaying = true; this.playFile(this.melodyIndex) });
                 var self = _this4;
                 self.routineInProgress = true;
-                _this4.motorpin.low();
+                // this.motorpin.low();
                 _this4.stepper.rpm(800).cw().accel(0).decel(0).step(_settings2.default.RANGE_MAX_POSITION, function () {
                     self.motorPosition = _settings2.default.RANGE_MAX_POSITION;
-                    self.motorpin.high();
+                    // self.motorpin.high();
                     resolve();
                 });
             });
@@ -29740,11 +29741,12 @@ var Arduino = function () {
         value: function bounce() {
             var self = this;
             var dir = 0;
+            var speed = 400;
             var steps = _settings2.default.SWING_MAX_RETRACT;
-            self.move(dir, steps, 600, 0, 0).then(function () {
+            self.move(dir, steps, speed, 0, 0).then(function () {
                 dir = dir === 0 ? 1 : 0;
                 if (self.isPlaying) {
-                    self.move(dir, steps, 600, 0, 0).then(function () {
+                    self.move(dir, steps, speed, 0, 0).then(function () {
                         if (self.isPlaying) self.bounce();else self.goHome();
                     });
                 } else {
@@ -29757,12 +29759,15 @@ var Arduino = function () {
         value: function bounceRandom() {
             var self = this;
             var dir = 0;
-            var steps = Math.random() * 1000;
-            self.move(dir, steps, 600, 0, 0).then(function () {
+            var speed = 400;
+            var steps = Math.round(Math.random() * 1000);
+            if (steps < 200) steps += 200;
+            self.move(dir, steps, speed, 0, 0).then(function () {
+                // steps = Math.round(Math.random()*1000);
                 dir = dir === 0 ? 1 : 0;
                 if (self.isPlaying) {
-                    self.move(dir, steps, 600, 0, 0).then(function () {
-                        if (self.isPlaying) self.bounce();else self.goHome();
+                    self.move(dir, steps, speed, 0, 0).then(function () {
+                        if (self.isPlaying) self.bounceRandom();else self.goHome();
                     });
                 } else {
                     self.goHome();
@@ -29774,37 +29779,80 @@ var Arduino = function () {
         value: function patternMove() {
             var _this5 = this;
 
-            var patterns = _settings2.default.getPatterns();
-            var playingFile = this.files[this.melodyIndex];
-            var pattern = patterns.find(function (p) {
-                return p.filename == playingFile;
-            });
-            var sets = pattern.pattern;
-            var chain = Promise.resolve();
-            var commands = [];
+            return new Promise(function (resolve) {
 
-            for (var index = 0; index < sets.length; index++) {
-                var p = sets[index];
-                var delay = p.pause;
-                var steps = p.distance;
-                var dir = p.distance >= 0 ? 1 : 0;
-                setTimeout(function () {
-                    chain = chain.then(_this5.mockMove);
-                }, delay);
-                //commands.push(this.move.bind(this,dir,steps,600,0,0));
-            }
-            // for(var func in commands){
-            //     chain = chain(func);
-            // }
-            console.log(pattern);
+                var self = _this5;
+                var patterns = _settings2.default.getPatterns();
+                var playingFile = _this5.files[_this5.melodyIndex];
+                var pattern = patterns.find(function (p) {
+                    return p.filename == playingFile;
+                });
+                var sets = pattern.pattern;
+                var chain = Promise.resolve();
+                var commands = [];
+
+                var _loop = function _loop(index) {
+                    var p = sets[index];
+                    var delay = p.pause;
+                    var steps = Math.abs(p.distance);
+                    var dir = p.distance >= 0 ? 1 : 0;
+                    setTimeout(function () {
+                        if (self.isPlaying) {
+                            chain = chain.then(function () {
+                                self.move(dir, steps, 600, 0, 0).then(function () {
+                                    if (index == sets.length - 1) {
+                                        resolve();
+                                    }
+                                });
+                            });
+                        } else {
+                            self.goHome();
+                        }
+                    }, delay);
+                    //commands.push(this.move.bind(this,dir,steps,600,0,0));
+                };
+
+                for (var index = 0; index < sets.length; index++) {
+                    _loop(index);
+                }
+                // for(var func in commands){
+                //     chain = chain(func);
+                // }
+                console.log(pattern);
+            });
         }
     }, {
         key: 'mockMove',
         value: function mockMove(dir, steps, speed, accel, decel) {
             return new Promise(function (resolve) {
                 setTimeout(function () {
+                    console.log('Dir:' + dir);
+                    console.log('Steps:' + steps);
+                    console.log('Speed:' + speed);
                     resolve();
-                }, 1000);
+                }, 3000);
+            });
+        }
+    }, {
+        key: 'lightOn',
+        value: function lightOn() {
+            var _this6 = this;
+
+            return new Promise(function () {
+                _this6.ledpin.high(function () {
+                    resolve();
+                });
+            });
+        }
+    }, {
+        key: 'lightOff',
+        value: function lightOff() {
+            var _this7 = this;
+
+            return new Promise(function () {
+                _this7.ledpin.low(function () {
+                    resolve();
+                });
             });
         }
     }, {
@@ -29829,6 +29877,111 @@ var Arduino = function () {
             this.mutepin.high();
             this.player.src = 'C:/Device/Files/' + this.files[index];
             this.player.play();
+        }
+
+        /**
+         * RTC
+         */
+
+    }, {
+        key: 'readRTC',
+        value: function readRTC() {
+            var _this8 = this;
+
+            return new Promise(function (resolve) {
+
+                _this8.board.i2cConfig();
+                _this8.board.i2cRead(0x68, 0x00, 7, function (res) {
+                    var sec = (res[0] >> 4) * 10 + (res[0] & 0x0F); // seconds	
+
+                    var min = (res[1] >> 4) * 10 + (res[1] & 0x0F); // minutes	
+
+                    var hour = ((res[2] & 0x30) >> 4) * 10 + (res[2] & 0x0F); // hours	
+
+                    var mode = (res[2] & 0x40) >> 6 ? "12h" : "24h"; // hour mode default 24
+
+                    var day = res[3]; // day of week
+
+                    var mday = (res[4] >> 4) * 10 + (res[4] & 0x0F); // day of month
+
+                    var month = ((res[5] & 0x10) >> 4) * 10 + (res[5] & 0x0F); // month
+
+                    var year = (res[6] >> 4) * 10 + (res[6] & 0x0F); // year
+                    resolve(new Date(2000 + year, --month, mday, hour, min, sec));
+                });
+            });
+        }
+    }, {
+        key: 'writeRTC',
+        value: function writeRTC() {
+            var datetime = new Date();
+            var bytes = [];
+
+            bytes[0] = Math.floor(datetime.getSeconds() / 10) << 4 | datetime.getSeconds() % 10;
+
+            bytes[1] = Math.floor(datetime.getMinutes() / 10) << 4 | datetime.getMinutes() % 10;
+
+            bytes[2] = Math.floor(datetime.getHours() / 10) << 4 | datetime.getHours() % 10;
+
+            bytes[3] = datetime.getDay() + 1;
+
+            bytes[4] = Math.floor(datetime.getDate() / 10) << 4 | datetime.getDate() % 10;
+
+            var month = datetime.getMonth() + 1;
+
+            bytes[5] = Math.floor(month / 10) << 4 | month % 10;
+
+            var year = datetime.getYear() % 100;
+
+            bytes[6] = Math.floor(year / 10) << 4 | year % 10;
+            this.board.i2cConfig();
+            this.board.i2cWrite(0x68, 0x00, bytes);
+        }
+
+        /**
+         * ROUTINES
+         */
+
+    }, {
+        key: 'runRoutine',
+        value: function runRoutine() {
+            var _this9 = this;
+
+            this.motorpin.low();
+            this.extendMax().then(function () {
+                _this9.lightOn();
+                _this9.bounce();
+            });
+            this.playFile(this.melodyIndex);
+            this.isPlaying = true;
+        }
+    }, {
+        key: 'runRandomRoutine',
+        value: function runRandomRoutine() {
+            var _this10 = this;
+
+            this.motorpin.low();
+            this.extendMax().then(function () {
+                _this10.lightOn();
+                _this10.bounceRandom();
+            });
+            this.playFile(this.melodyIndex);
+            this.isPlaying = true;
+        }
+    }, {
+        key: 'runPatternRoutine',
+        value: function runPatternRoutine() {
+            var _this11 = this;
+
+            this.motorpin.low();
+            this.extendMax().then(function () {
+                _this11.lightOn();
+                _this11.patternMove().then(function () {
+                    if (_this11.isPlaying) _this11.canGoHome = true;
+                });
+            });
+            this.playFile(this.melodyIndex);
+            this.isPlaying = true;
         }
     }]);
 
@@ -30143,8 +30296,79 @@ if (!deviceID) {
     deviceID = newID;
 }
 
+client.checkConnection().catch(function () {
+    var status = new _status2.default();
+    _util2.default.log('Connection established');
+    selftest.checkIntegrity().then(function (result) {
+        if (result) {
+            status.integrity = true;
+            _util2.default.log('Integrity passed!');
+        } else {
+            _util2.default.log('Integrity failed!');
+        }
+        // sound check
+        selftest.checkSound().then(function (result) {
+            if (result) {
+                _util2.default.log('Sound passed!');
+                status.sound = true;
+            } else {
+                _util2.default.log('Sound failed!');
+            }
+            _board2.default.initialize().then(function () {
+                // read movement and voltage from arduino
+                _board2.default.readVoltage().then(function (res) {
+                    status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
+                });
+                selftest.record().then(function (videofile) {
+                    //add data to a form and submit
+                    var formData = new FormData();
+                    formData.append('sound', status.sound);
+                    formData.append('product', status.integrity);
+                    //TODO get data from device!!!
+                    formData.append('mechanism', 1);
+                    formData.append('battery', status.battery);
+                    formData.append('activations', '258');
+                    formData.append('id', deviceID);
+                    var fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
+                    formData.append('files', fileOfBlob);
+                    client.postFormData(formData).then(function (response) {
+                        _util2.default.log('Data received from server');
+                        //set time and date if received
+                        if (response.servertime) {}
+                        // let dt = eval(response.servertime.replace('/',''));
+                        // console.log(dt);
+
+                        //wait for files 
+                        loadFiles();
+                        _settings2.default.saveSettings(response.settings);
+                        _settings2.default.savePatterns(response.patterns);
+                        if (canStartRoutine) {
+                            clearInterval(checkRoutineInterval);
+                            startDevice();
+                        } else {
+                            checkRoutineInterval = setInterval(function () {
+                                if (canStartRoutine) {
+                                    clearInterval(checkRoutineInterval);
+                                    startDevice();
+                                }
+                            }, 1000);
+                        }
+                    }).catch(function (err) {
+                        _util2.default.error(err);
+                    });
+                });
+            });
+        });
+    });
+}).then(function () {
+    _util2.default.log('No internet connection');
+    _board2.default.initialize().then(function () {
+        alert("Arduino ready!");
+    });
+});
+
 // client.checkConnection()
-//     .catch(() => {
+//     .then(() => {
 //         let status = new DeviceStatus();
 //         console.log('Connection established');
 //         selftest.checkIntegrity().then((result) => {
@@ -30163,11 +30387,10 @@ if (!deviceID) {
 //                     } else {
 //                         console.log('Sound failed!');
 //                     }
-//                     Arduino.initialize().then(() => {
 //                         // read movement and voltage from arduino
-//                         Arduino.readVoltage().then((res) => { 
-//                             status.battery='Volts:'+res.volts+';Amps:'+res.amps;
-//                         });
+
+//                             status.battery='Volts: 4.998;Amps:225';
+
 //                         selftest.record().then((videofile) => {
 //                             //add data to a form and submit
 //                             let formData = new FormData();
@@ -30183,6 +30406,8 @@ if (!deviceID) {
 //                             client.postFormData(formData)
 //                                 .then((response)=>{
 //                                     console.log('Data received from server');
+//                                     //destroy video control
+//                                     selftest.destroyVideo();
 //                                     //set time and date if received
 //                                     if(response.servertime){
 //                                         // let dt = eval(response.servertime.replace('/',''));
@@ -30191,6 +30416,7 @@ if (!deviceID) {
 //                                     //wait for files 
 //                                     loadFiles();
 //                                     Settings.saveSettings(response.settings);
+//                                     Settings.savePatterns(response.patterns);
 //                                     if(canStartRoutine){
 //                                         clearInterval(checkRoutineInterval);
 //                                         startDevice();
@@ -30198,7 +30424,7 @@ if (!deviceID) {
 //                                         checkRoutineInterval = setInterval(()=>{
 //                                             if(canStartRoutine){
 //                                                 clearInterval(checkRoutineInterval);
-//                                                 startDevice()
+//                                                 startDevice();
 //                                             }
 //                                         },1000);
 //                                     }
@@ -30208,86 +30434,14 @@ if (!deviceID) {
 //                                     console.error(err);
 //                                 });
 //                         });
-//                     });
 
 //                 });
 //         });
 
 //     })
-//     .then(() => {
+//     .catch(() => {
 //         console.log('No internet connection');
-//         Arduino.initialize().then(() => {
-//             alert("Arduino ready!")
-//         });
 //     });
-
-client.checkConnection().then(function () {
-    var status = new _status2.default();
-    _util2.default.log('Connection established');
-    selftest.checkIntegrity().then(function (result) {
-        if (result) {
-            status.integrity = true;
-            _util2.default.log('Integrity passed!');
-        } else {
-            _util2.default.log('Integrity failed!');
-        }
-        // sound check
-        selftest.checkSound().then(function (result) {
-            if (result) {
-                _util2.default.log('Sound passed!');
-                status.sound = true;
-            } else {
-                _util2.default.log('Sound failed!');
-            }
-            // read movement and voltage from arduino
-
-            status.battery = 'Volts: 4.998;Amps:225';
-
-            selftest.record().then(function (videofile) {
-                //add data to a form and submit
-                var formData = new FormData();
-                formData.append('sound', status.sound);
-                formData.append('product', status.integrity);
-                //TODO get data from device!!!
-                formData.append('mechanism', 1);
-                formData.append('battery', status.battery);
-                formData.append('activations', '258');
-                formData.append('id', deviceID);
-                var fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
-                formData.append('files', fileOfBlob);
-                client.postFormData(formData).then(function (response) {
-                    _util2.default.log('Data received from server');
-                    //destroy video control
-                    selftest.destroyVideo();
-                    //set time and date if received
-                    if (response.servertime) {}
-                    // let dt = eval(response.servertime.replace('/',''));
-                    // console.log(dt);
-
-                    //wait for files 
-                    loadFiles();
-                    _settings2.default.saveSettings(response.settings);
-                    _settings2.default.savePatterns(response.patterns);
-                    if (canStartRoutine) {
-                        clearInterval(checkRoutineInterval);
-                        startDevice();
-                    } else {
-                        checkRoutineInterval = setInterval(function () {
-                            if (canStartRoutine) {
-                                clearInterval(checkRoutineInterval);
-                                startDevice();
-                            }
-                        }, 1000);
-                    }
-                }).catch(function (err) {
-                    _util2.default.error(err);
-                });
-            });
-        });
-    });
-}).catch(function () {
-    _util2.default.log('No internet connection');
-});
 
 function startDevice() {
     _util2.default.info('Device started on' + new Date());
@@ -30632,6 +30786,12 @@ var _jquery = require('jquery');
 
 var $ = _interopRequireWildcard(_jquery);
 
+var _board = require('./../board/board');
+
+var _board2 = _interopRequireDefault(_board);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -30646,6 +30806,7 @@ var DeviceTest = function () {
         this.dirCtl = document.querySelector('#direction');
         this.speedCtl = document.querySelector('#speed');
         this.ledStatusCtl = document.querySelector('#ledstatus');
+        this.rtcread = document.querySelector('#rtcread');
         this.addListeners();
         this.loadAudioFiles();
     }
@@ -30659,23 +30820,29 @@ var DeviceTest = function () {
             document.querySelector('#btnGoHome').addEventListener('click', this.goHomeMotor.bind(this));
             document.querySelector('#btnBounceEven').addEventListener('click', this.bounceEvenMotor.bind(this));
             document.querySelector('#btnBounceRandom').addEventListener('click', this.bounceRandomMotor.bind(this));
+            document.querySelector('#btnPattern').addEventListener('click', this.bouncePatternMotor.bind(this));
 
             document.querySelector('#checkstatus').addEventListener('change', this.ledCheck.bind(this));
+            document.querySelector('#btnReadRTC').addEventListener('click', this.readRTC.bind(this));
+            document.querySelector('#btnWriteRTC').addEventListener('click', this.writeRTC.bind(this));
         }
     }, {
         key: 'loadAudioFiles',
         value: function loadAudioFiles() {
-            var audioSel = document.querySelector('#audioSelect');
-            audioSel.addEventListener('change', function () {
-                document.querySelector('#myAudio').src = audioSel.value;
+            var self = this;
+            this.files = [];
+            this.audioSel = document.querySelector('#audioSelect');
+            this.audioSel.addEventListener('change', function () {
+                document.querySelector('#myAudio').src = self.audioSel.value;
             });
-            audioSel.innerHTML = '';
+            self.audioSel.innerHTML = '';
             fs.readdir('Files', function (err, f) {
                 f.forEach(function (file) {
                     var opt = document.createElement('option');
                     opt.value = 'C:/Device/Files/' + file;
                     opt.innerHTML = file;
-                    audioSel.appendChild(opt);
+                    self.files.push(file);
+                    self.audioSel.appendChild(opt);
                 });
             });
         }
@@ -30730,28 +30897,84 @@ var DeviceTest = function () {
         value: function resetDevice() {}
     }, {
         key: 'moveCustomMotor',
-        value: function moveCustomMotor() {}
+        value: function moveCustomMotor() {
+            var dir = Number(this.dirCtl.value);
+            var speedChar = this.speedCtl.value;
+            var steps = Number(this.stepsCtl.value);
+            var speed = 300;
+            switch (speedChar) {
+                case 'low':
+                    speed = 200;
+                    break;
+                case 'medium':
+                    speed = 400;
+                    break;
+                case 'high':
+                    speed = 600;
+                    break;
+            }
+            _board2.default.routineInProgress = true;
+            _board2.default.move(dir, steps, speed, 0, 0);
+        }
     }, {
         key: 'extendMotor',
-        value: function extendMotor() {}
+        value: function extendMotor() {
+            _board2.default.extendMax();
+        }
     }, {
         key: 'goHomeMotor',
-        value: function goHomeMotor() {}
+        value: function goHomeMotor() {
+            _board2.default.goHome();
+        }
     }, {
         key: 'bounceEvenMotor',
-        value: function bounceEvenMotor() {}
+        value: function bounceEvenMotor() {
+            _board2.default.melodyIndex = this.getFileIndex();
+            _board2.default.runRoutine();
+        }
+    }, {
+        key: 'bouncePatternMotor',
+        value: function bouncePatternMotor() {
+            _board2.default.melodyIndex = this.getFileIndex();
+            _board2.default.runPatternRoutine();
+        }
     }, {
         key: 'bounceRandomMotor',
-        value: function bounceRandomMotor() {}
+        value: function bounceRandomMotor() {
+            _board2.default.melodyIndex = this.getFileIndex();
+            _board2.default.runRandomRoutine();
+        }
+    }, {
+        key: 'getFileIndex',
+        value: function getFileIndex() {
+            var file = this.audioSel.value.replace('C:/Device/Files/', '');
+            var fileIndex = this.files.indexOf(file);
+            return fileIndex;
+        }
     }, {
         key: 'ledCheck',
         value: function ledCheck(e) {
             var chk = e.target;
             console.log(chk.checked);
+            if (chk.checked) _board2.default.lightOn.apply(_board2.default, arguments);else _board2.default.lightOff.apply(_board2.default, arguments);
             var rclass = chk.checked ? 'red' : 'green';
             var aclass = chk.checked ? 'green' : 'red';
             this.ledStatusCtl.classList.remove(rclass);
             this.ledStatusCtl.classList.add(aclass);
+        }
+    }, {
+        key: 'readRTC',
+        value: function readRTC() {
+            var _this = this;
+
+            _board2.default.readRTC.apply(_board2.default, arguments).then(function (date) {
+                _this.rtcread.innerHTML = date;
+            });
+        }
+    }, {
+        key: 'writeRTC',
+        value: function writeRTC() {
+            _board2.default.writeRTC.apply(_board2.default, arguments);
         }
     }]);
 
@@ -30760,7 +30983,7 @@ var DeviceTest = function () {
 
 exports.default = DeviceTest;
 
-},{"jquery":6}],14:[function(require,module,exports){
+},{"./../board/board":8,"jquery":6}],14:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {

@@ -1,4 +1,5 @@
 import * as $ from 'jquery';
+import Arduino from './../board/board';
 const fs = nw.require('fs');
 
 export default class DeviceTest {
@@ -7,6 +8,7 @@ export default class DeviceTest {
         this.dirCtl = document.querySelector('#direction');
         this.speedCtl = document.querySelector('#speed');
         this.ledStatusCtl = document.querySelector('#ledstatus');
+        this.rtcread = document.querySelector('#rtcread');
         this.addListeners();
         this.loadAudioFiles();
     }
@@ -17,22 +19,28 @@ export default class DeviceTest {
         document.querySelector('#btnGoHome').addEventListener('click', this.goHomeMotor.bind(this));
         document.querySelector('#btnBounceEven').addEventListener('click', this.bounceEvenMotor.bind(this));
         document.querySelector('#btnBounceRandom').addEventListener('click', this.bounceRandomMotor.bind(this));
+        document.querySelector('#btnPattern').addEventListener('click', this.bouncePatternMotor.bind(this));
 
         document.querySelector('#checkstatus').addEventListener('change', this.ledCheck.bind(this));
+        document.querySelector('#btnReadRTC').addEventListener('click', this.readRTC.bind(this));
+        document.querySelector('#btnWriteRTC').addEventListener('click', this.writeRTC.bind(this));
     }
 
     loadAudioFiles(){
-        let audioSel = document.querySelector('#audioSelect');
-        audioSel.addEventListener('change',()=>{
-            document.querySelector('#myAudio').src = audioSel.value;
+        let self = this;
+        this.files = [];
+        this.audioSel = document.querySelector('#audioSelect');
+        this.audioSel.addEventListener('change',()=>{
+            document.querySelector('#myAudio').src = self.audioSel.value;
         });
-        audioSel.innerHTML = '';
+        self.audioSel.innerHTML = '';
         fs.readdir('Files', (err, f) => {
             f.forEach(file => {
                 let opt = document.createElement('option');
                 opt.value = 'C:/Device/Files/'+file;
                 opt.innerHTML = file;
-                audioSel.appendChild(opt);
+                self.files.push(file);
+                self.audioSel.appendChild(opt);
             });
         });
     }
@@ -80,20 +88,65 @@ export default class DeviceTest {
     resetDevice() { }
 
     moveCustomMotor() {
-
+        let dir = Number(this.dirCtl.value);
+        let speedChar = this.speedCtl.value;
+        let steps = Number(this.stepsCtl.value);
+        let speed = 300;
+        switch(speedChar){
+            case 'low':
+            speed = 200;
+            break;
+            case 'medium':
+            speed = 400;
+            break;
+            case 'high':
+            speed = 600;
+            break;
+        }
+        Arduino.routineInProgress = true;
+        Arduino.move(dir,steps,speed,0,0);
     }
-    extendMotor() { }
-    goHomeMotor() { }
-    bounceEvenMotor() { }
-    bounceRandomMotor() { }
-
+    extendMotor() { 
+        Arduino.extendMax();
+    }
+    goHomeMotor() { 
+        Arduino.goHome();
+    }
+    bounceEvenMotor() { 
+        Arduino.melodyIndex = this.getFileIndex();
+        Arduino.runRoutine();
+    }
+    bouncePatternMotor(){
+        Arduino.melodyIndex = this.getFileIndex();
+        Arduino.runPatternRoutine();
+    }
+    bounceRandomMotor() {
+        Arduino.melodyIndex = this.getFileIndex();
+        Arduino.runRandomRoutine(); 
+    }
+    getFileIndex(){
+        let file = this.audioSel.value.replace('C:/Device/Files/','');
+        let fileIndex = this.files.indexOf(file);
+        return fileIndex;
+    }
     ledCheck(e) {
         let chk = e.target;
         console.log(chk.checked);
+        if(chk.checked) Arduino.lightOn.apply(Arduino,arguments);
+        else Arduino.lightOff.apply(Arduino,arguments);
         let rclass = chk.checked ? 'red' : 'green';
         let aclass = chk.checked ? 'green' : 'red';
         this.ledStatusCtl.classList.remove(rclass);
         this.ledStatusCtl.classList.add(aclass);
+    }
+
+    readRTC(){
+        Arduino.readRTC.apply(Arduino,arguments).then((date)=>{
+            this.rtcread.innerHTML = date;
+        }); 
+    }
+    writeRTC(){
+        Arduino.writeRTC.apply(Arduino,arguments);
     }
 
 
