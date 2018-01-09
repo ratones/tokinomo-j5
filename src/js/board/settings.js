@@ -164,7 +164,10 @@ class DeviceSettings {
 
 
     get(key){
-        this.settings.find((s)=>{return s.name === key}).val;
+        let s = this.settings.find((s)=>{return s.name === key});
+        if(s.val === 'true') return true;
+        if(s.val === 'false') return false;
+        return s.val;
     }
 
     persistKey(key, value) {
@@ -418,7 +421,7 @@ class DeviceSettings {
             });
             Arduino.melodyIndex = fileIndex;
             console.log(fileIndex);
-            //Arduino.runPatternRoutine();
+            Arduino.runPatternRoutine();
         });
          
      }

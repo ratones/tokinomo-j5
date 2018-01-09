@@ -123,7 +123,7 @@ export default class SelfTest {
                     navigator.mozGetUserMedia;
 
                 // ask for an audio input
-                navigator.getUserMedia(
+                navigator.webkitGetUserMedia(
                     {
                         "audio": {
                             "mandatory": {

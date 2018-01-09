@@ -20,7 +20,9 @@ class Arduino {
             if (this.melodyIndex >= this.files.length)
                 this.melodyIndex = 0;
             if (this.canGoHome) this.goHome();
-            this.lastRun = new Date().getSeconds();
+            setTimeout(()=>{
+                this.timeoutPassed = true;
+            },parseInt(DeviceSettings.get('WAITING_TIME')));
         });
         this.canGoHome = false;
         this.isMoving = true;
@@ -28,6 +30,7 @@ class Arduino {
         this.routineInProgress = false;
         this.player = player;
         this.melodyIndex = 0;
+        this.timeoutPassed = true;//for pause detection
         // add cleanup if window closes
         nw.Window.get().on('close', function () {
             self.stopProcedure().then(() => this.close(true));
@@ -99,24 +102,27 @@ class Arduino {
                 volts = state.value;
                 pina.query(function (state) {
                     amps = state.value;
-                    resove({ volts, amps });
+                    resolve({ volts, amps });
                 });
             });
             resolve({ volts, amps });
         });
 
     }
-    move(dir, steps, speed, accel, decel) {
+    move(dir, steps, speed, accel, decel,timeout) {
+        if(!timeout) timeout = 0;
+        console.log(timeout);
         return new Promise((resolve) => {
-            // this.motorpin.low();
-            this.motorIsMoving = true;
-            this.stepper.step({
-                steps: steps,
-                direction: dir,
-                rpm: speed,
-                accel: accel,
-                decel: decel
-            }
+            setTimeout(()=>{
+                // this.motorpin.low();
+                this.motorIsMoving = true;
+                this.stepper.step({
+                    steps: steps,
+                    direction: dir,
+                    rpm: speed,
+                    accel: accel,
+                    decel: decel
+                }
                 , () => {
                     // this.motorpin.high();
                     this.motorPosition = dir === 0 ? this.motorPosition - steps : this.motorPosition + steps;
@@ -124,6 +130,7 @@ class Arduino {
                     resolve();
                     this.motorIsMoving = false;
                 });
+            },timeout);
         });
     }
 
@@ -169,8 +176,8 @@ class Arduino {
             let self = this;
             self.routineInProgress = true;
             // this.motorpin.low();
-            this.stepper.rpm(800).cw().accel(0).decel(0).step(DeviceSettings.get('RANGE_MAX_POSITION'), () => {
-                self.motorPosition = DeviceSettings.get('RANGE_MAX_POSITION');
+            this.stepper.rpm(800).cw().accel(0).decel(0).step(parseInt(DeviceSettings.get('RANGE_MAX_POSITION')), () => {
+                self.motorPosition = parseInt(DeviceSettings.get('RANGE_MAX_POSITION'));
                 // self.motorpin.high();
                 resolve();
             });
@@ -181,7 +188,7 @@ class Arduino {
         let self = this;
         let dir = 0;
         let speed = 400;
-        let steps = DeviceSettings.get('SWING_MAX_RETRACT');
+        let steps = parseInt(DeviceSettings.get('SWING_MAX_RETRACT'));
         self.move(dir, steps, speed, 0, 0).then(() => {
             dir = dir === 0 ? 1 : 0;
             if (self.isPlaying) {
@@ -222,23 +229,21 @@ class Arduino {
             let sets = pattern.pattern;
             let chain = Promise.resolve();
             let commands = [];
-
             for (let index = 0; index < sets.length; index++) {
                 const p = sets[index];
                 let delay = p.pause;
-                let steps = Math.abs(p.distance);
-                let dir = p.distance >= 0 ? 1 : 0;
-                setTimeout(() => {
-                    chain = chain.then(() => {
-                        self.move(dir, steps, 600, 0, 0);
-                    });
-                }, delay);
-                //commands.push(this.move.bind(this,dir,steps,600,0,0));
+                let steps = Math.abs(Number(p.distance));
+                let dir = Number(p.distance) >= 0 ? 1 : 0;  
+                console.log(index);    
+                commands.push(self.move.bind(self,dir,steps,400,0,0,delay));          
+            }
+            for(const func of commands){
+                chain = chain.then(func); 
             }
            this.isDonePlaying().then(()=>{
                this.goHome();
            });
-            console.log(pattern);
+        console.log(pattern);
     }
 
     mockMove(dir, steps, speed, accel, decel) {
@@ -282,7 +287,7 @@ class Arduino {
         return new Promise((resolve) => {
 
             this.board.i2cConfig();
-            this.board.i2cReadOance(0x68, 0x00, 7, function (res) {
+            this.board.i2cReadOnce(0x68, 0x00, 7, function (res) {
                 var sec = (res[0] >> 4) * 10 + (res[0] & 0x0F); 				// seconds	
                 var min = (res[1] >> 4) * 10 + (res[1] & 0x0F); 				// minutes	
                 var hour = ((res[2] & 0x30) >> 4) * 10 + (res[2] & 0x0F); 	// hours	
@@ -313,6 +318,46 @@ class Arduino {
         this.board.i2cWrite(0x68, 0x00, bytes);
     }
 
+    alterRegister(register, mask, clearSet) {
+
+        var byte = mask;
+        this.board.i2cConfig();
+        this.board.i2cReadOnce(0x68,register, register+1, function(err, res) {
+    
+            if(clearSet == "clear")
+    
+                byte &= res[0];
+    
+            else
+    
+                byte |= res[0];
+    
+        });
+    
+        this.board.i2cWrite(0x68,register, [ byte ]);
+    }
+    enableAlarmOne() {
+        this.alterRegister(0x0E, 0x01, "set");
+    }
+    setAlarmOne = function(datetime) {
+
+        if(!datetime instanceof Date) throw new Error();
+        var bytes = []; 
+        this.rtc.readBytes(0x07, 0x0B, function(err, res) {
+            bytes[0] = res[0] & 0x80;
+            bytes[1] = res[1] & 0x80;
+            bytes[2] = res[2] & 0x80;
+            bytes[3] = res[3] & 0x80;
+    
+    
+            bytes[0] |= Math.floor(datetime.getSeconds()/10) << 4 | datetime.getSeconds()%10;
+            bytes[1] |= Math.floor(datetime.getMinutes()/10) << 4 | datetime.getMinutes()%10;
+            bytes[2] |= Math.floor(datetime.getHours()/10) << 4 | datetime.getHours()%10;
+            bytes[3] |= Math.floor(datetime.getDate()/10) << 4 | datetime.getDate()%10;
+        });
+        this.board.i2cConfig();
+        this.board.i2cWrite(0x07, bytes);   
+    };
     /**
      * ROUTINES
      */
@@ -349,9 +394,7 @@ class Arduino {
         this.motorpin.low();
         this.extendMax().then(() => {
             if(DeviceSettings.get('USE_BLITZ')) this.blinkLED();
-            this.patternMove().then(() => {
-                //if (this.isPlaying) this.canGoHome = true;
-            });
+            this.patternMove();
         });
         this.playFile(this.melodyIndex);
         this.isPlaying = true;
@@ -367,13 +410,13 @@ class Arduino {
             let interval = parseInt(DeviceSettings.get('BLITZ_DELAY'));
             this.lightInterval = setInterval(()=>{
                 if(state){
-                    this.lightOn();
+                    this.ledpin.high();
                     state = !state
                 }else{
-                    this.lightOff();
+                    this.ledpin.low();
                     state = !state;
                 }
-            });
+            },interval);
         }else{
             this.lightOn();
         }
@@ -388,14 +431,13 @@ class Arduino {
     }
 
     lightOff() {
-        return new Promise(() => {
-            this.ledpin.low(() => {
-                if(this.lightInterval){
-                    clearInterval(this.lightInterval);
-                    this.lightInterval = null;
-                }
-                resolve();
-            });
+        return new Promise((resolve) => {
+            this.ledpin.low();
+            if(this.lightInterval){
+                clearInterval(this.lightInterval);
+                this.lightInterval = null;
+            }
+            resolve();
         });
     }
 
@@ -426,8 +468,10 @@ class Arduino {
     stopProcedure() {
         return new Promise((resolve)=>{
             this.player.pause();
+            this.mutepin.low();
             clearInterval(this.moveInterval);
             this.isPlaying = false;
+            this.lightOff();
             this.isMotorHome().then(()=>{
                 resolve();
             });
@@ -436,17 +480,20 @@ class Arduino {
     startProcedure(){
         if(DeviceSettings.get('USE_MOTION_SENSOR')){
             this.moveInterval = setInterval(()=>{
-                this.movepin.query((v)=>{
-                    this.sensorRead(v);
+                this.movepin.query((state)=>{
+                    // console.log(v);
+                    if(state.value  > 400) this.sensorRead();
                 });
             },100);
         }else{
-            runLoop();
+            this.runLoop();
         }
     }
-    sensorRead(value){
+    sensorRead(){
         let timestamp = new Date().getSeconds();
-        if(timestamp - this.lastRun > DeviceSettings.get('WAITING_TIME')/1000){
+        if(this.routineInProgress)  return;
+        if(this.timeoutPassed){
+            this.timeoutPassed = false;
             if(DeviceSettings.get('CONTINUOS_MOVE')){
                 if(DeviceSettings.get('USE_PATTERN_MOVEMENT')){
                     this.runPatternRoutine();
@@ -461,7 +508,7 @@ class Arduino {
         }
     }
     runLoop(){
-
+        console.log('not suposed to rich here')
     }
 }
 export default new Arduino();

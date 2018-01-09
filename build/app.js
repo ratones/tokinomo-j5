@@ -29560,6 +29560,25 @@ var Arduino = function () {
 
         _classCallCheck(this, Arduino);
 
+        this.setAlarmOne = function (datetime) {
+
+            if (!datetime instanceof Date) throw new Error();
+            var bytes = [];
+            this.rtc.readBytes(0x07, 0x0B, function (err, res) {
+                bytes[0] = res[0] & 0x80;
+                bytes[1] = res[1] & 0x80;
+                bytes[2] = res[2] & 0x80;
+                bytes[3] = res[3] & 0x80;
+
+                bytes[0] |= Math.floor(datetime.getSeconds() / 10) << 4 | datetime.getSeconds() % 10;
+                bytes[1] |= Math.floor(datetime.getMinutes() / 10) << 4 | datetime.getMinutes() % 10;
+                bytes[2] |= Math.floor(datetime.getHours() / 10) << 4 | datetime.getHours() % 10;
+                bytes[3] |= Math.floor(datetime.getDate() / 10) << 4 | datetime.getDate() % 10;
+            });
+            this.board.i2cConfig();
+            this.board.i2cWrite(0x07, bytes);
+        };
+
         var self = this;
         var player = document.querySelector('#myAudio');
         player.volume = 0.5;
@@ -29570,7 +29589,9 @@ var Arduino = function () {
             _this.melodyIndex++;
             if (_this.melodyIndex >= _this.files.length) _this.melodyIndex = 0;
             if (_this.canGoHome) _this.goHome();
-            _this.lastRun = new Date().getSeconds();
+            setTimeout(function () {
+                _this.timeoutPassed = true;
+            }, parseInt(_settings2.default.get('WAITING_TIME')));
         });
         this.canGoHome = false;
         this.isMoving = true;
@@ -29578,6 +29599,7 @@ var Arduino = function () {
         this.routineInProgress = false;
         this.player = player;
         this.melodyIndex = 0;
+        this.timeoutPassed = true; //for pause detection
         // add cleanup if window closes
         nw.Window.get().on('close', function () {
             var _this2 = this;
@@ -29661,7 +29683,7 @@ var Arduino = function () {
                     volts = state.value;
                     pina.query(function (state) {
                         amps = state.value;
-                        resove({ volts: volts, amps: amps });
+                        resolve({ volts: volts, amps: amps });
                     });
                 });
                 resolve({ volts: volts, amps: amps });
@@ -29669,25 +29691,29 @@ var Arduino = function () {
         }
     }, {
         key: 'move',
-        value: function move(dir, steps, speed, accel, decel) {
+        value: function move(dir, steps, speed, accel, decel, timeout) {
             var _this4 = this;
 
+            if (!timeout) timeout = 0;
+            console.log(timeout);
             return new Promise(function (resolve) {
-                // this.motorpin.low();
-                _this4.motorIsMoving = true;
-                _this4.stepper.step({
-                    steps: steps,
-                    direction: dir,
-                    rpm: speed,
-                    accel: accel,
-                    decel: decel
-                }, function () {
-                    // this.motorpin.high();
-                    _this4.motorPosition = dir === 0 ? _this4.motorPosition - steps : _this4.motorPosition + steps;
-                    // console.log(this.motorPosition);
-                    resolve();
-                    _this4.motorIsMoving = false;
-                });
+                setTimeout(function () {
+                    // this.motorpin.low();
+                    _this4.motorIsMoving = true;
+                    _this4.stepper.step({
+                        steps: steps,
+                        direction: dir,
+                        rpm: speed,
+                        accel: accel,
+                        decel: decel
+                    }, function () {
+                        // this.motorpin.high();
+                        _this4.motorPosition = dir === 0 ? _this4.motorPosition - steps : _this4.motorPosition + steps;
+                        // console.log(this.motorPosition);
+                        resolve();
+                        _this4.motorIsMoving = false;
+                    });
+                }, timeout);
             });
         }
     }, {
@@ -29740,8 +29766,8 @@ var Arduino = function () {
                 var self = _this5;
                 self.routineInProgress = true;
                 // this.motorpin.low();
-                _this5.stepper.rpm(800).cw().accel(0).decel(0).step(_settings2.default.get('RANGE_MAX_POSITION'), function () {
-                    self.motorPosition = _settings2.default.get('RANGE_MAX_POSITION');
+                _this5.stepper.rpm(800).cw().accel(0).decel(0).step(parseInt(_settings2.default.get('RANGE_MAX_POSITION')), function () {
+                    self.motorPosition = parseInt(_settings2.default.get('RANGE_MAX_POSITION'));
                     // self.motorpin.high();
                     resolve();
                 });
@@ -29753,7 +29779,7 @@ var Arduino = function () {
             var self = this;
             var dir = 0;
             var speed = 400;
-            var steps = _settings2.default.get('SWING_MAX_RETRACT');
+            var steps = parseInt(_settings2.default.get('SWING_MAX_RETRACT'));
             self.move(dir, steps, speed, 0, 0).then(function () {
                 dir = dir === 0 ? 1 : 0;
                 if (self.isPlaying) {
@@ -29799,23 +29825,39 @@ var Arduino = function () {
             var sets = pattern.pattern;
             var chain = Promise.resolve();
             var commands = [];
-
-            var _loop = function _loop(index) {
+            for (var index = 0; index < sets.length; index++) {
                 var p = sets[index];
                 var delay = p.pause;
-                var steps = Math.abs(p.distance);
-                var dir = p.distance >= 0 ? 1 : 0;
-                setTimeout(function () {
-                    chain = chain.then(function () {
-                        self.move(dir, steps, 600, 0, 0);
-                    });
-                }, delay);
-                //commands.push(this.move.bind(this,dir,steps,600,0,0));
-            };
-
-            for (var index = 0; index < sets.length; index++) {
-                _loop(index);
+                var steps = Math.abs(Number(p.distance));
+                var dir = Number(p.distance) >= 0 ? 1 : 0;
+                console.log(index);
+                commands.push(self.move.bind(self, dir, steps, 400, 0, 0, delay));
             }
+            var _iteratorNormalCompletion = true;
+            var _didIteratorError = false;
+            var _iteratorError = undefined;
+
+            try {
+                for (var _iterator = commands[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+                    var func = _step.value;
+
+                    chain = chain.then(func);
+                }
+            } catch (err) {
+                _didIteratorError = true;
+                _iteratorError = err;
+            } finally {
+                try {
+                    if (!_iteratorNormalCompletion && _iterator.return) {
+                        _iterator.return();
+                    }
+                } finally {
+                    if (_didIteratorError) {
+                        throw _iteratorError;
+                    }
+                }
+            }
+
             this.isDonePlaying().then(function () {
                 _this6.goHome();
             });
@@ -29869,7 +29911,7 @@ var Arduino = function () {
             return new Promise(function (resolve) {
 
                 _this7.board.i2cConfig();
-                _this7.board.i2cReadOance(0x68, 0x00, 7, function (res) {
+                _this7.board.i2cReadOnce(0x68, 0x00, 7, function (res) {
                     var sec = (res[0] >> 4) * 10 + (res[0] & 0x0F); // seconds	
                     var min = (res[1] >> 4) * 10 + (res[1] & 0x0F); // minutes	
                     var hour = ((res[2] & 0x30) >> 4) * 10 + (res[2] & 0x0F); // hours	
@@ -29899,13 +29941,30 @@ var Arduino = function () {
             this.board.i2cConfig();
             this.board.i2cWrite(0x68, 0x00, bytes);
         }
+    }, {
+        key: 'alterRegister',
+        value: function alterRegister(register, mask, clearSet) {
+
+            var byte = mask;
+            this.board.i2cConfig();
+            this.board.i2cReadOnce(0x68, register, register + 1, function (err, res) {
+
+                if (clearSet == "clear") byte &= res[0];else byte |= res[0];
+            });
+
+            this.board.i2cWrite(0x68, register, [byte]);
+        }
+    }, {
+        key: 'enableAlarmOne',
+        value: function enableAlarmOne() {
+            this.alterRegister(0x0E, 0x01, "set");
+        }
+    }, {
+        key: 'runInOutRoutine',
 
         /**
          * ROUTINES
          */
-
-    }, {
-        key: 'runInOutRoutine',
         value: function runInOutRoutine() {
             var _this8 = this;
 
@@ -29953,9 +30012,7 @@ var Arduino = function () {
             this.motorpin.low();
             this.extendMax().then(function () {
                 if (_settings2.default.get('USE_BLITZ')) _this11.blinkLED();
-                _this11.patternMove().then(function () {
-                    //if (this.isPlaying) this.canGoHome = true;
-                });
+                _this11.patternMove();
             });
             this.playFile(this.melodyIndex);
             this.isPlaying = true;
@@ -29976,13 +30033,13 @@ var Arduino = function () {
                 var interval = parseInt(_settings2.default.get('BLITZ_DELAY'));
                 this.lightInterval = setInterval(function () {
                     if (state) {
-                        _this12.lightOn();
+                        _this12.ledpin.high();
                         state = !state;
                     } else {
-                        _this12.lightOff();
+                        _this12.ledpin.low();
                         state = !state;
                     }
-                });
+                }, interval);
             } else {
                 this.lightOn();
             }
@@ -30003,14 +30060,13 @@ var Arduino = function () {
         value: function lightOff() {
             var _this14 = this;
 
-            return new Promise(function () {
-                _this14.ledpin.low(function () {
-                    if (_this14.lightInterval) {
-                        clearInterval(_this14.lightInterval);
-                        _this14.lightInterval = null;
-                    }
-                    resolve();
-                });
+            return new Promise(function (resolve) {
+                _this14.ledpin.low();
+                if (_this14.lightInterval) {
+                    clearInterval(_this14.lightInterval);
+                    _this14.lightInterval = null;
+                }
+                resolve();
             });
         }
 
@@ -30053,8 +30109,10 @@ var Arduino = function () {
 
             return new Promise(function (resolve) {
                 _this17.player.pause();
+                _this17.mutepin.low();
                 clearInterval(_this17.moveInterval);
                 _this17.isPlaying = false;
+                _this17.lightOff();
                 _this17.isMotorHome().then(function () {
                     resolve();
                 });
@@ -30067,19 +30125,22 @@ var Arduino = function () {
 
             if (_settings2.default.get('USE_MOTION_SENSOR')) {
                 this.moveInterval = setInterval(function () {
-                    _this18.movepin.query(function (v) {
-                        _this18.sensorRead(v);
+                    _this18.movepin.query(function (state) {
+                        // console.log(v);
+                        if (state.value > 400) _this18.sensorRead();
                     });
                 }, 100);
             } else {
-                runLoop();
+                this.runLoop();
             }
         }
     }, {
         key: 'sensorRead',
-        value: function sensorRead(value) {
+        value: function sensorRead() {
             var timestamp = new Date().getSeconds();
-            if (timestamp - this.lastRun > _settings2.default.get('WAITING_TIME') / 1000) {
+            if (this.routineInProgress) return;
+            if (this.timeoutPassed) {
+                this.timeoutPassed = false;
                 if (_settings2.default.get('CONTINUOS_MOVE')) {
                     if (_settings2.default.get('USE_PATTERN_MOVEMENT')) {
                         this.runPatternRoutine();
@@ -30095,7 +30156,9 @@ var Arduino = function () {
         }
     }, {
         key: 'runLoop',
-        value: function runLoop() {}
+        value: function runLoop() {
+            console.log('not suposed to rich here');
+        }
     }]);
 
     return Arduino;
@@ -30306,9 +30369,12 @@ var DeviceSettings = function () {
     }, {
         key: 'get',
         value: function get(key) {
-            this.settings.find(function (s) {
+            var s = this.settings.find(function (s) {
                 return s.name === key;
-            }).val;
+            });
+            if (s.val === 'true') return true;
+            if (s.val === 'false') return false;
+            return s.val;
         }
     }, {
         key: 'persistKey',
@@ -30589,7 +30655,7 @@ var DeviceSettings = function () {
                 });
                 _board2.default.melodyIndex = fileIndex;
                 console.log(fileIndex);
-                //Arduino.runPatternRoutine();
+                _board2.default.runPatternRoutine();
             });
         }
     }, {
@@ -30750,8 +30816,11 @@ client.checkConnection().then(function () {
                 _util2.default.log('Sound failed!');
             }
             // read movement and voltage from arduino
-
-            status.battery = 'Volts: 4.998;Amps:225';
+            _board2.default.initialize().then(function () {
+                _board2.default.readVoltage().then(function (res) {
+                    status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
+                });
+            });
 
             selftest.record().then(function (videofile) {
                 //add data to a form and submit
@@ -31532,7 +31601,7 @@ var SelfTest = function () {
                     navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
 
                     // ask for an audio input
-                    navigator.getUserMedia({
+                    navigator.webkitGetUserMedia({
                         "audio": {
                             "mandatory": {
                                 "googEchoCancellation": "false",
