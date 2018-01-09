@@ -31,12 +31,18 @@ export default class Menu {
                 this.test.stopRoutine();
             }
         }));
-        devicemenu.append(new nw.MenuItem({
+        var editmenu = new nw.Menu();
+        editmenu.append(new nw.MenuItem({
             label: 'Device settings', click: () => {
                 DeviceSettings.loadPage();
             }
         }));
-        devicemenu.append(new nw.MenuItem({
+        editmenu.append(new nw.MenuItem({
+            label: 'File patterns', click: () => {
+                DeviceSettings.loadPatternsPage();
+            }
+        }));
+        editmenu.append(new nw.MenuItem({
             label: 'Device status', click: () => {
                 DeviceSettings.exit();
             }
@@ -45,6 +51,10 @@ export default class Menu {
         menu.append(new nw.MenuItem({
             label: 'Application',
             submenu: appmenu
+        }));
+        menu.append(new nw.MenuItem({
+            label: 'View',
+            submenu: editmenu
         }));
         menu.append(new nw.MenuItem({
             label: 'Device',

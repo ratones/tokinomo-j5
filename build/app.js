@@ -29560,6 +29560,7 @@ var Arduino = function () {
 
         _classCallCheck(this, Arduino);
 
+        var self = this;
         var player = document.querySelector('#myAudio');
         player.volume = 0.5;
         player.addEventListener('ended', function () {
@@ -29569,6 +29570,7 @@ var Arduino = function () {
             _this.melodyIndex++;
             if (_this.melodyIndex >= _this.files.length) _this.melodyIndex = 0;
             if (_this.canGoHome) _this.goHome();
+            _this.lastRun = new Date().getSeconds();
         });
         this.canGoHome = false;
         this.isMoving = true;
@@ -29576,6 +29578,15 @@ var Arduino = function () {
         this.routineInProgress = false;
         this.player = player;
         this.melodyIndex = 0;
+        // add cleanup if window closes
+        nw.Window.get().on('close', function () {
+            var _this2 = this;
+
+            self.stopProcedure().then(function () {
+                return _this2.close(true);
+            });
+            // this.close(true);
+        });
     }
 
     _createClass(Arduino, [{
@@ -29596,17 +29607,17 @@ var Arduino = function () {
     }, {
         key: 'initialize',
         value: function initialize() {
-            var _this2 = this;
+            var _this3 = this;
 
             var self = this;
             return new Promise(function (resolve, reject) {
-                _this2.listFiles();
-                _this2.detectArduinoPort().then(function (com) {
+                _this3.listFiles();
+                _this3.detectArduinoPort().then(function (com) {
                     var board = new five.Board({
                         port: com,
                         repl: false
                     });
-                    _this2.board = board;
+                    _this3.board = board;
                     board.on("ready", function () {
                         self.mutepin = new five.Pin(11);
                         self.motorpin = new five.Pin(6);
@@ -29625,7 +29636,7 @@ var Arduino = function () {
                         self.motorpin.high();
                         self.zeropin.read(function (error, value) {
                             self.zeroPinValue = value;
-                            if (value > 500 && !self.routineInProgress) {
+                            if (value > 500 && !self.routineInProgress && !self.motorIsMoving) {
                                 self.move(0, 100, 2000, 0, 100);
                             } else {}
                             //self.motorPosition = 0;
@@ -29659,12 +29670,12 @@ var Arduino = function () {
     }, {
         key: 'move',
         value: function move(dir, steps, speed, accel, decel) {
-            var _this3 = this;
+            var _this4 = this;
 
             return new Promise(function (resolve) {
                 // this.motorpin.low();
-                _this3.motorIsMoving = true;
-                _this3.stepper.step({
+                _this4.motorIsMoving = true;
+                _this4.stepper.step({
                     steps: steps,
                     direction: dir,
                     rpm: speed,
@@ -29672,10 +29683,10 @@ var Arduino = function () {
                     decel: decel
                 }, function () {
                     // this.motorpin.high();
-                    _this3.motorPosition = dir === 0 ? _this3.motorPosition - steps : _this3.motorPosition + steps;
+                    _this4.motorPosition = dir === 0 ? _this4.motorPosition - steps : _this4.motorPosition + steps;
                     // console.log(this.motorPosition);
                     resolve();
-                    _this3.motorIsMoving = false;
+                    _this4.motorIsMoving = false;
                 });
             });
         }
@@ -29722,15 +29733,15 @@ var Arduino = function () {
     }, {
         key: 'extendMax',
         value: function extendMax() {
-            var _this4 = this;
+            var _this5 = this;
 
             return new Promise(function (resolve) {
                 // this.listFiles().then(() => { this.isPlaying = true; this.playFile(this.melodyIndex) });
-                var self = _this4;
+                var self = _this5;
                 self.routineInProgress = true;
                 // this.motorpin.low();
-                _this4.stepper.rpm(800).cw().accel(0).decel(0).step(_settings2.default.RANGE_MAX_POSITION, function () {
-                    self.motorPosition = _settings2.default.RANGE_MAX_POSITION;
+                _this5.stepper.rpm(800).cw().accel(0).decel(0).step(_settings2.default.get('RANGE_MAX_POSITION'), function () {
+                    self.motorPosition = _settings2.default.get('RANGE_MAX_POSITION');
                     // self.motorpin.high();
                     resolve();
                 });
@@ -29742,7 +29753,7 @@ var Arduino = function () {
             var self = this;
             var dir = 0;
             var speed = 400;
-            var steps = _settings2.default.SWING_MAX_RETRACT;
+            var steps = _settings2.default.get('SWING_MAX_RETRACT');
             self.move(dir, steps, speed, 0, 0).then(function () {
                 dir = dir === 0 ? 1 : 0;
                 if (self.isPlaying) {
@@ -29777,49 +29788,38 @@ var Arduino = function () {
     }, {
         key: 'patternMove',
         value: function patternMove() {
-            var _this5 = this;
+            var _this6 = this;
 
-            return new Promise(function (resolve) {
-
-                var self = _this5;
-                var patterns = _settings2.default.getPatterns();
-                var playingFile = _this5.files[_this5.melodyIndex];
-                var pattern = patterns.find(function (p) {
-                    return p.filename == playingFile;
-                });
-                var sets = pattern.pattern;
-                var chain = Promise.resolve();
-                var commands = [];
-
-                var _loop = function _loop(index) {
-                    var p = sets[index];
-                    var delay = p.pause;
-                    var steps = Math.abs(p.distance);
-                    var dir = p.distance >= 0 ? 1 : 0;
-                    setTimeout(function () {
-                        if (self.isPlaying) {
-                            chain = chain.then(function () {
-                                self.move(dir, steps, 600, 0, 0).then(function () {
-                                    if (index == sets.length - 1) {
-                                        resolve();
-                                    }
-                                });
-                            });
-                        } else {
-                            self.goHome();
-                        }
-                    }, delay);
-                    //commands.push(this.move.bind(this,dir,steps,600,0,0));
-                };
-
-                for (var index = 0; index < sets.length; index++) {
-                    _loop(index);
-                }
-                // for(var func in commands){
-                //     chain = chain(func);
-                // }
-                console.log(pattern);
+            var self = this;
+            var patterns = _settings2.default.getPatterns();
+            var playingFile = this.files[this.melodyIndex];
+            var pattern = patterns.find(function (p) {
+                return p.filename == playingFile;
             });
+            var sets = pattern.pattern;
+            var chain = Promise.resolve();
+            var commands = [];
+
+            var _loop = function _loop(index) {
+                var p = sets[index];
+                var delay = p.pause;
+                var steps = Math.abs(p.distance);
+                var dir = p.distance >= 0 ? 1 : 0;
+                setTimeout(function () {
+                    chain = chain.then(function () {
+                        self.move(dir, steps, 600, 0, 0);
+                    });
+                }, delay);
+                //commands.push(this.move.bind(this,dir,steps,600,0,0));
+            };
+
+            for (var index = 0; index < sets.length; index++) {
+                _loop(index);
+            }
+            this.isDonePlaying().then(function () {
+                _this6.goHome();
+            });
+            console.log(pattern);
         }
     }, {
         key: 'mockMove',
@@ -29831,28 +29831,6 @@ var Arduino = function () {
                     console.log('Speed:' + speed);
                     resolve();
                 }, 3000);
-            });
-        }
-    }, {
-        key: 'lightOn',
-        value: function lightOn() {
-            var _this6 = this;
-
-            return new Promise(function () {
-                _this6.ledpin.high(function () {
-                    resolve();
-                });
-            });
-        }
-    }, {
-        key: 'lightOff',
-        value: function lightOff() {
-            var _this7 = this;
-
-            return new Promise(function () {
-                _this7.ledpin.low(function () {
-                    resolve();
-                });
             });
         }
     }, {
@@ -29886,26 +29864,19 @@ var Arduino = function () {
     }, {
         key: 'readRTC',
         value: function readRTC() {
-            var _this8 = this;
+            var _this7 = this;
 
             return new Promise(function (resolve) {
 
-                _this8.board.i2cConfig();
-                _this8.board.i2cRead(0x68, 0x00, 7, function (res) {
+                _this7.board.i2cConfig();
+                _this7.board.i2cReadOance(0x68, 0x00, 7, function (res) {
                     var sec = (res[0] >> 4) * 10 + (res[0] & 0x0F); // seconds	
-
                     var min = (res[1] >> 4) * 10 + (res[1] & 0x0F); // minutes	
-
                     var hour = ((res[2] & 0x30) >> 4) * 10 + (res[2] & 0x0F); // hours	
-
                     var mode = (res[2] & 0x40) >> 6 ? "12h" : "24h"; // hour mode default 24
-
                     var day = res[3]; // day of week
-
                     var mday = (res[4] >> 4) * 10 + (res[4] & 0x0F); // day of month
-
                     var month = ((res[5] & 0x10) >> 4) * 10 + (res[5] & 0x0F); // month
-
                     var year = (res[6] >> 4) * 10 + (res[6] & 0x0F); // year
                     resolve(new Date(2000 + year, --month, mday, hour, min, sec));
                 });
@@ -29916,23 +29887,14 @@ var Arduino = function () {
         value: function writeRTC() {
             var datetime = new Date();
             var bytes = [];
-
             bytes[0] = Math.floor(datetime.getSeconds() / 10) << 4 | datetime.getSeconds() % 10;
-
             bytes[1] = Math.floor(datetime.getMinutes() / 10) << 4 | datetime.getMinutes() % 10;
-
             bytes[2] = Math.floor(datetime.getHours() / 10) << 4 | datetime.getHours() % 10;
-
             bytes[3] = datetime.getDay() + 1;
-
             bytes[4] = Math.floor(datetime.getDate() / 10) << 4 | datetime.getDate() % 10;
-
             var month = datetime.getMonth() + 1;
-
             bytes[5] = Math.floor(month / 10) << 4 | month % 10;
-
             var year = datetime.getYear() % 100;
-
             bytes[6] = Math.floor(year / 10) << 4 | year % 10;
             this.board.i2cConfig();
             this.board.i2cWrite(0x68, 0x00, bytes);
@@ -29943,13 +29905,28 @@ var Arduino = function () {
          */
 
     }, {
+        key: 'runInOutRoutine',
+        value: function runInOutRoutine() {
+            var _this8 = this;
+
+            this.motorpin.low();
+            this.extendMax().then(function () {
+                if (_settings2.default.get('USE_BLITZ')) _this8.blinkLED();
+            });
+            this.playFile(this.melodyIndex);
+            this.isPlaying = true;
+            this.isDonePlaying().then(function () {
+                _this8.goHome();
+            });
+        }
+    }, {
         key: 'runRoutine',
         value: function runRoutine() {
             var _this9 = this;
 
             this.motorpin.low();
             this.extendMax().then(function () {
-                _this9.lightOn();
+                if (_settings2.default.get('USE_BLITZ')) _this9.blinkLED();
                 _this9.bounce();
             });
             this.playFile(this.melodyIndex);
@@ -29962,7 +29939,7 @@ var Arduino = function () {
 
             this.motorpin.low();
             this.extendMax().then(function () {
-                _this10.lightOn();
+                if (_settings2.default.get('USE_BLITZ')) _this10.blinkLED();
                 _this10.bounceRandom();
             });
             this.playFile(this.melodyIndex);
@@ -29975,14 +29952,150 @@ var Arduino = function () {
 
             this.motorpin.low();
             this.extendMax().then(function () {
-                _this11.lightOn();
+                if (_settings2.default.get('USE_BLITZ')) _this11.blinkLED();
                 _this11.patternMove().then(function () {
-                    if (_this11.isPlaying) _this11.canGoHome = true;
+                    //if (this.isPlaying) this.canGoHome = true;
                 });
             });
             this.playFile(this.melodyIndex);
             this.isPlaying = true;
         }
+
+        /**
+         * LIGHT ROUTINES
+         */
+
+    }, {
+        key: 'blinkLED',
+        value: function blinkLED() {
+            var _this12 = this;
+
+            var count = parseInt(_settings2.default.get('BLITZ_COUNT'));
+            if (count > 1) {
+                var state = true;
+                var interval = parseInt(_settings2.default.get('BLITZ_DELAY'));
+                this.lightInterval = setInterval(function () {
+                    if (state) {
+                        _this12.lightOn();
+                        state = !state;
+                    } else {
+                        _this12.lightOff();
+                        state = !state;
+                    }
+                });
+            } else {
+                this.lightOn();
+            }
+        }
+    }, {
+        key: 'lightOn',
+        value: function lightOn() {
+            var _this13 = this;
+
+            return new Promise(function () {
+                _this13.ledpin.high(function () {
+                    resolve();
+                });
+            });
+        }
+    }, {
+        key: 'lightOff',
+        value: function lightOff() {
+            var _this14 = this;
+
+            return new Promise(function () {
+                _this14.ledpin.low(function () {
+                    if (_this14.lightInterval) {
+                        clearInterval(_this14.lightInterval);
+                        _this14.lightInterval = null;
+                    }
+                    resolve();
+                });
+            });
+        }
+
+        /**
+         * SHUTDOWN PROCEDURE
+         */
+
+    }, {
+        key: 'isDonePlaying',
+        value: function isDonePlaying() {
+            var _this15 = this;
+
+            return new Promise(function (resolve) {
+                var interv = setInterval(function () {
+                    if (!_this15.isPlaying) {
+                        clearInterval(interv);
+                        resolve();
+                    }
+                });
+            });
+        }
+    }, {
+        key: 'isMotorHome',
+        value: function isMotorHome() {
+            var _this16 = this;
+
+            return new Promise(function (resolve) {
+                var interv = setInterval(function () {
+                    if (!_this16.routineInProgress) {
+                        clearInterval(interv);
+                        resolve();
+                    }
+                });
+            });
+        }
+    }, {
+        key: 'stopProcedure',
+        value: function stopProcedure() {
+            var _this17 = this;
+
+            return new Promise(function (resolve) {
+                _this17.player.pause();
+                clearInterval(_this17.moveInterval);
+                _this17.isPlaying = false;
+                _this17.isMotorHome().then(function () {
+                    resolve();
+                });
+            });
+        }
+    }, {
+        key: 'startProcedure',
+        value: function startProcedure() {
+            var _this18 = this;
+
+            if (_settings2.default.get('USE_MOTION_SENSOR')) {
+                this.moveInterval = setInterval(function () {
+                    _this18.movepin.query(function (v) {
+                        _this18.sensorRead(v);
+                    });
+                }, 100);
+            } else {
+                runLoop();
+            }
+        }
+    }, {
+        key: 'sensorRead',
+        value: function sensorRead(value) {
+            var timestamp = new Date().getSeconds();
+            if (timestamp - this.lastRun > _settings2.default.get('WAITING_TIME') / 1000) {
+                if (_settings2.default.get('CONTINUOS_MOVE')) {
+                    if (_settings2.default.get('USE_PATTERN_MOVEMENT')) {
+                        this.runPatternRoutine();
+                    } else if (_settings2.default.get('USE_RANDOM_MOVEMENT')) {
+                        this.runRandomRoutine();
+                    } else {
+                        this.runRoutine();
+                    }
+                } else {
+                    this.runInOutRoutine();
+                }
+            }
+        }
+    }, {
+        key: 'runLoop',
+        value: function runLoop() {}
     }]);
 
     return Arduino;
@@ -30007,44 +30120,53 @@ var _client = require('./../network/client');
 
 var _client2 = _interopRequireDefault(_client);
 
+var _board = require('./board');
+
+var _board2 = _interopRequireDefault(_board);
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
+var fs = nw.require('fs');
+
 var DeviceSettings = function () {
     function DeviceSettings() {
         _classCallCheck(this, DeviceSettings);
 
-        this.FRAGILE_PRODUCT = false;
-        this.SWING_MAX_RETRACT = 1000;
-        this.RANGE_MAX_POSITION = 3350;
-        this.CONTINUOS_MOVE = true;
-        this.USE_MOTION_SENSOR = true;
-        this.RANDOM_PLAY = false;
-        this.USE_CLOCK_RESET = false;
-        this.CLOCK_START_TIME = '2017-06-01T09:00:00.000Z';
-        this.CLOCK_END_TIME = '2017-06-01T22:00:00.000Z';
-        this.UTC_DIFF = 7;
-        this.MOTION_STARTING_DIR = 1;
-        this.KEEP_MOTOR_ON = false;
-        this.SPEED = 50000;
-        this.USE_PATTERN_MOVEMENT = true;
-        this.USE_RANDOM_MOVEMENT = false;
-        this.USE_DELAY = false;
-        this.DELAY_INTERVAL = 0;
-        this.USE_BLITZ = true;
-        this.BLITZ_COUNT = 1;
-        this.BLITZ_DELAY = 0;
-        this.LOOP_PAUSE = 5000;
-        this.PAUSE_BETWEEN_TRACKS = 5000;
-        this.ALLOWED_DETECTIONS = 2;
-        this.WAITING_TIME = 5000;
-        this.LOOP_COUNT_CONT = 1;
-        this.DIFFERENCE = 5000;
-        this.WAITING_TIME_DETECT = 1000;
-        this.ACCELERATION = 90000;
+        this.defaults = {
+            FRAGILE_PRODUCT: false,
+            SWING_MAX_RETRACT: 1000,
+            RANGE_MAX_POSITION: 3350,
+            CONTINUOS_MOVE: true,
+            USE_MOTION_SENSOR: true,
+            RANDOM_PLAY: false,
+            USE_CLOCK_RESET: false,
+            CLOCK_START_TIME: '2017-06-01T09:00:00.000Z',
+            CLOCK_END_TIME: '2017-06-01T22:00:00.000Z',
+            UTC_DIFF: 7,
+            MOTION_STARTING_DIR: 1,
+            KEEP_MOTOR_ON: false,
+            SPEED: 50000,
+            USE_PATTERN_MOVEMENT: true,
+            USE_RANDOM_MOVEMENT: false,
+            USE_DELAY: false,
+            DELAY_INTERVAL: 0,
+            USE_BLITZ: true,
+            BLITZ_COUNT: 1,
+            BLITZ_DELAY: 0,
+            LOOP_PAUSE: 5000,
+            PAUSE_BETWEEN_TRACKS: 5000,
+            ALLOWED_DETECTIONS: 2,
+            WAITING_TIME: 5000,
+            LOOP_COUNT_CONT: 1,
+            DIFFERENCE: 5000,
+            WAITING_TIME_DETECT: 1000,
+            ACCELERATION: 90000
+        };
+        this.settings = [];
         // this.USE_BATTERY_RESET = false;
         // this.BATTERY_RESET_INTERVAL = 30000;
         document.querySelector('#btnSaveLocal').addEventListener('click', this.saveLocal.bind(this));
@@ -30055,40 +30177,48 @@ var DeviceSettings = function () {
         key: 'loadPage',
         value: function loadPage() {
             document.querySelector('#layout').classList.add('hidden');
+            document.querySelector('#edit-patterns').classList.add('hidden');
             document.querySelector('.edit-settings').classList.remove('hidden');
             this.bindValues();
         }
     }, {
+        key: 'loadPatternsPage',
+        value: function loadPatternsPage() {
+            document.querySelector('#layout').classList.add('hidden');
+            document.querySelector('#edit-patterns').classList.remove('hidden');
+            document.querySelector('.edit-settings').classList.add('hidden');
+            this.buildView();
+        }
+    }, {
         key: 'exit',
         value: function exit() {
-            document.querySelector('.edit-settings').classList.add('hidden');
             document.querySelector('#layout').classList.remove('hidden');
+            document.querySelector('#edit-patterns').classList.add('hidden');
+            document.querySelector('.edit-settings').classList.add('hidden');
         }
     }, {
         key: 'saveSettings',
         value: function saveSettings(settings) {
-            this.deserialize(settings);
-            this.persistKey('deviceSettings', JSON.stringify(this));
+            //this.deserialize(settings);
+            this.persistKey('deviceSettings', JSON.stringify(settings));
+            this.settings = settings;
         }
     }, {
         key: 'loadSettings',
         value: function loadSettings() {
             var settings = this.persistKey('deviceSettings');
             if (settings) {
-                this.deserializePersistent(JSON.parse(settings));
+                this.settings = JSON.parse(settings);
             }
         }
     }, {
         key: 'saveLocal',
         value: function saveLocal() {
-            var _this = this;
-
-            var json = {};
-            Object.keys(this).forEach(function (key) {
-                var el = document.querySelector('#' + key);
+            this.settings.forEach(function (key) {
+                var el = document.querySelector('#' + key.name);
                 if (el) {
                     if (el.type == 'checkbox') {
-                        _this[key] = el.checked;
+                        key.val = el.checked ? 'true' : 'false';
                     } else {
                         if (el.id.search('TIME') != -1 && el.id != "WAITING_TIME") {
                             var dt = new Date();
@@ -30097,27 +30227,28 @@ var DeviceSettings = function () {
                             dt.setSeconds(el.value.split(':')[2]);
                             //el.value = dt;
                             // dt.setHours(dt.getHours() + this.UTC_DIFF);
-                            _this[key] = dt;
+                            key.val = dt;
                         } else {
-                            _this[key] = el.value;
+                            key.val = el.value;
                         }
                     }
                 }
             });
-            this.persistKey('deviceSettings', JSON.stringify(this));
+            this.persistKey('deviceSettings', JSON.stringify(this.settings));
         }
     }, {
         key: 'saveServer',
         value: function saveServer() {
-            var _this2 = this;
+            var _this = this;
 
             var json = {};
             var client = new _client2.default();
-            Object.keys(this).forEach(function (key) {
-                var el = document.querySelector('#' + key);
+
+            this.settings.forEach(function (key) {
+                var el = document.querySelector('#' + key.name);
                 if (el) {
                     if (el.type == 'checkbox') {
-                        _this2[key] = el.checked;
+                        key.val = el.checked ? 'true' : 'false';
                     } else {
                         if (el.id.search('TIME') != -1 && el.id != "WAITING_TIME") {
                             var dt = new Date();
@@ -30126,34 +30257,34 @@ var DeviceSettings = function () {
                             dt.setSeconds(el.value.split(':')[2]);
                             //el.value = dt;
                             // dt.setHours(dt.getHours() + this.UTC_DIFF);
-                            _this2[key] = dt;
+                            key.val = dt;
                         } else {
-                            _this2[key] = el.value;
+                            key.val = el.value;
                         }
                     }
                 }
             });
-            client.postSettings(JSON.stringify(this));
+            client.postSettings(JSON.stringify(this.settings)).then(function () {
+                _this.persistKey('deviceSettings', JSON.stringify(_this.settings));
+            });
         }
     }, {
         key: 'bindValues',
         value: function bindValues() {
-            var _this3 = this;
-
             this.loadSettings();
-            Object.keys(this).forEach(function (key) {
-                var el = document.querySelector('#' + key);
+            this.settings.forEach(function (key) {
+                var el = document.querySelector('#' + key.name);
                 if (el) {
                     if (el.type == 'checkbox') {
-                        el.checked = _this3[key];
+                        el.checked = key.val == 'true' ? true : false;
                     } else {
                         if (el.id.search('TIME') != -1 && el.id != "WAITING_TIME") {
-                            var dt = new Date(_this3[key]);
+                            var dt = new Date(key.val);
                             //el.value = dt;
                             // dt.setHours(dt.getHours() + this.UTC_DIFF);
                             el.value = String('00' + dt.getHours()).slice(-2) + ':' + String('00' + dt.getMinutes()).slice(-2) + ':' + String('00' + dt.getSeconds()).slice(-2);
                         } else {
-                            el.value = _this3[key];
+                            el.value = key.val;
                         }
                     }
                 }
@@ -30171,6 +30302,13 @@ var DeviceSettings = function () {
         key: 'savePatterns',
         value: function savePatterns(data) {
             this.persistKey('patterns', JSON.stringify(data));
+        }
+    }, {
+        key: 'get',
+        value: function get(key) {
+            this.settings.find(function (s) {
+                return s.name === key;
+            }).val;
         }
     }, {
         key: 'persistKey',
@@ -30194,11 +30332,11 @@ var DeviceSettings = function () {
     }, {
         key: 'deserializePersistent',
         value: function deserializePersistent(json) {
-            var _this4 = this;
+            var _this2 = this;
 
             this.__original__ = _.cloneDeep(json);
             Object.keys(this.__original__).forEach(function (key) {
-                return _this4[key] = json[key];
+                return _this2[key] = json[key];
             });
         }
     }, {
@@ -30243,6 +30381,224 @@ var DeviceSettings = function () {
         value: function isPropertyForSerialization(propName) {
             return propName !== 'undefined' && propName !== "isDirtyProp" && !/^__/.test(propName);
         }
+
+        /**
+         * PATTERNS
+         */
+
+    }, {
+        key: 'buildView',
+        value: function buildView() {
+            var _this3 = this;
+
+            var patterns = this.getPatterns().sort(function (a, b) {
+                if (a.filename < b.filename) {
+                    return -1;
+                }
+                if (a.filename > b.filename) {
+                    return 1;
+                }
+                return 0;
+            });
+            var page = document.querySelector('#edit-patterns');
+            page.innerHTML = '';
+            patterns.forEach(function (p) {
+                //build file container
+                var fieldset = document.createElement('fieldset');
+                var legend = document.createElement('legend');
+                legend.innerText = p.filename;
+                fieldset.appendChild(legend);
+                //add button
+                var addBtn = document.createElement('button');
+                addBtn.innerText = 'Add row';
+                addBtn.id = p.fileid;
+                addBtn.addEventListener('click', _this3.addRow.bind(_this3));
+                fieldset.appendChild(addBtn);
+                var saveBtn = document.createElement('button');
+                saveBtn.innerText = 'Save Local';
+                saveBtn.id = 'save' + p.fileid;
+                saveBtn.addEventListener('click', _this3.savePatternLocal.bind(_this3));
+                fieldset.appendChild(saveBtn);
+                var saveBtnServer = document.createElement('button');
+                saveBtnServer.innerText = 'Save Server';
+                saveBtnServer.id = 'save' + p.fileid;
+                saveBtnServer.addEventListener('click', _this3.savePatternServer.bind(_this3));
+                fieldset.appendChild(saveBtnServer);
+
+                var testBtn = document.createElement('button');
+                testBtn.innerText = 'Test pattern';
+                testBtn.id = 'test' + p.fileid;
+                testBtn.addEventListener('click', _this3.runPatternTest.bind(_this3));
+                fieldset.appendChild(testBtn);
+                //patterns container
+                var paternsTable = document.createElement('div');
+                paternsTable.classList.add('file-patterns');
+                paternsTable.id = 'file' + p.fileid;
+                p.pattern.forEach(function (x) {
+                    var row = document.createElement('div');
+                    row.classList.add('patern-row');
+                    var pauseCol = document.createElement('div');
+                    pauseCol.classList.add('patern-column');
+                    var pauseEditor = document.createElement('input');
+                    pauseEditor.value = x.pause;
+                    pauseEditor.classList.add('pause-value');
+                    pauseCol.appendChild(pauseEditor);
+                    var distanceCol = document.createElement('div');
+                    distanceCol.classList.add('patern-column');
+                    var distanceEditor = document.createElement('input');
+                    distanceEditor.value = x.distance;
+                    distanceEditor.classList.add('direction-value');
+                    distanceCol.appendChild(distanceEditor);
+                    var idCol = document.createElement('div');
+                    idCol.classList.add('patern-column');
+                    var idEditor = document.createElement('input');
+                    idEditor.type = 'hidden';
+                    idEditor.value = x.id;
+                    idEditor.classList.add('id-value');
+                    idCol.appendChild(idEditor);
+                    var delBtn = document.createElement('button');
+                    delBtn.innerHTML = 'Delete';
+                    delBtn.id = x.id;
+                    delBtn.addEventListener('click', _this3.delRow);
+                    delBtn.classList.add('patern-column');
+                    row.appendChild(pauseCol);
+                    row.appendChild(distanceCol);
+                    row.appendChild(idCol);
+                    row.appendChild(delBtn);
+                    paternsTable.appendChild(row);
+                });
+                fieldset.appendChild(paternsTable);
+                page.appendChild(fieldset);
+            });
+        }
+    }, {
+        key: 'addRow',
+        value: function addRow(e) {
+            var fileid = e.target.id;
+            var paternsTable = document.querySelector('#file' + fileid);
+            var row = document.createElement('div');
+            row.classList.add('patern-row');
+            var pauseCol = document.createElement('div');
+            pauseCol.classList.add('patern-column');
+            var pauseEditor = document.createElement('input');
+            pauseEditor.value = 0;
+            pauseEditor.classList.add('pause-value');
+            pauseCol.appendChild(pauseEditor);
+            var distanceCol = document.createElement('div');
+            distanceCol.classList.add('patern-column');
+            var distanceEditor = document.createElement('input');
+            distanceEditor.value = 0;
+            distanceEditor.classList.add('direction-value');
+            distanceCol.appendChild(distanceEditor);
+            var idCol = document.createElement('div');
+            idCol.classList.add('patern-column');
+            var idEditor = document.createElement('input');
+            idEditor.type = 'hidden';
+            idEditor.value = 0;
+            idEditor.classList.add('id-value');
+            idCol.appendChild(idEditor);
+            var delBtn = document.createElement('button');
+            delBtn.innerHTML = 'Delete';
+            //delBtn.id=0;
+            delBtn.addEventListener('click', this.delRow);
+            delBtn.classList.add('patern-column');
+            row.appendChild(pauseCol);
+            row.appendChild(distanceCol);
+            row.appendChild(idCol);
+            row.appendChild(delBtn);
+            paternsTable.appendChild(row);
+        }
+    }, {
+        key: 'delRow',
+        value: function delRow(e) {
+            var row = e.target.parentNode;
+            row.parentNode.removeChild(row);
+        }
+    }, {
+        key: 'savePatternServer',
+        value: function savePatternServer(e) {
+            var _this4 = this;
+
+            var fileid = e.target.id.replace('save', '');
+            var container = document.querySelector('#file' + fileid);
+            var newPatterns = [];
+            container.querySelectorAll('.patern-row').forEach(function (row) {
+                var pause = row.querySelector('.pause-value').value;
+                var direction = row.querySelector('.direction-value').value;
+                var id = row.querySelector('.id-value').value;
+                newPatterns.push({ pause: pause, distance: direction, file_id: fileid });
+            });
+            console.log(newPatterns);
+            var client = new _client2.default();
+            client.postPattern(fileid, JSON.stringify(newPatterns)).then(function () {
+                var patterns = _this4.getPatterns();
+                var fp = patterns.find(function (p) {
+                    return p.fileid == fileid;
+                });
+                fp.pattern = newPatterns;
+                _this4.savePatterns(patterns);
+            });
+        }
+    }, {
+        key: 'savePatternLocal',
+        value: function savePatternLocal(e) {
+            var fileid = e.target.id.replace('save', '');
+            var container = document.querySelector('#file' + fileid);
+            var newPatterns = [];
+            container.querySelectorAll('.patern-row').forEach(function (row) {
+                var pause = row.querySelector('.pause-value').value;
+                var direction = row.querySelector('.direction-value').value;
+                var id = row.querySelector('.id-value').value;
+                newPatterns.push({ pause: pause, distance: direction, file_id: fileid });
+            });
+            console.log(newPatterns);
+
+            var patterns = this.getPatterns();
+            var fp = patterns.find(function (p) {
+                return p.fileid == fileid;
+            });
+            fp.pattern = newPatterns;
+            this.savePatterns(patterns);
+        }
+    }, {
+        key: 'runPatternTest',
+        value: function runPatternTest(e) {
+            var fileid = e.target.id.replace('test', '');
+            var container = document.querySelector('#file' + fileid);
+            var newPatterns = [];
+            container.querySelectorAll('.patern-row').forEach(function (row) {
+                var pause = row.querySelector('.pause-value').value;
+                var direction = row.querySelector('.direction-value').value;
+                var id = row.querySelector('.id-value').value;
+                newPatterns.push({ pause: pause, distance: direction, file_id: fileid });
+            });
+            console.log(newPatterns);
+
+            var patterns = this.getPatterns();
+            var fp = patterns.find(function (p) {
+                return p.fileid == fileid;
+            });
+            fp.pattern = newPatterns;
+            this.savePatterns(patterns);
+            var fileIndex = 0;
+            fs.readdir('C:/Device/Files', function (err, f) {
+                f.forEach(function (file, index) {
+                    if (fp.filename == file) {
+                        fileIndex = index;
+                    }
+                });
+                _board2.default.melodyIndex = fileIndex;
+                console.log(fileIndex);
+                //Arduino.runPatternRoutine();
+            });
+        }
+    }, {
+        key: 'getFileIndex',
+        value: function getFileIndex(melody) {
+            var file = this.audioSel.value.replace('C:/Device/Files/', '');
+            var fileIndex = this.files.indexOf(file);
+            return fileIndex;
+        }
     }]);
 
     return DeviceSettings;
@@ -30250,7 +30606,7 @@ var DeviceSettings = function () {
 
 exports.default = new DeviceSettings();
 
-},{"./../network/client":12,"lodash":7}],10:[function(require,module,exports){
+},{"./../network/client":12,"./board":8,"lodash":7}],10:[function(require,module,exports){
 'use strict';
 
 var _index = require('./selftest/index');
@@ -30296,79 +30652,8 @@ if (!deviceID) {
     deviceID = newID;
 }
 
-client.checkConnection().catch(function () {
-    var status = new _status2.default();
-    _util2.default.log('Connection established');
-    selftest.checkIntegrity().then(function (result) {
-        if (result) {
-            status.integrity = true;
-            _util2.default.log('Integrity passed!');
-        } else {
-            _util2.default.log('Integrity failed!');
-        }
-        // sound check
-        selftest.checkSound().then(function (result) {
-            if (result) {
-                _util2.default.log('Sound passed!');
-                status.sound = true;
-            } else {
-                _util2.default.log('Sound failed!');
-            }
-            _board2.default.initialize().then(function () {
-                // read movement and voltage from arduino
-                _board2.default.readVoltage().then(function (res) {
-                    status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
-                });
-                selftest.record().then(function (videofile) {
-                    //add data to a form and submit
-                    var formData = new FormData();
-                    formData.append('sound', status.sound);
-                    formData.append('product', status.integrity);
-                    //TODO get data from device!!!
-                    formData.append('mechanism', 1);
-                    formData.append('battery', status.battery);
-                    formData.append('activations', '258');
-                    formData.append('id', deviceID);
-                    var fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
-                    formData.append('files', fileOfBlob);
-                    client.postFormData(formData).then(function (response) {
-                        _util2.default.log('Data received from server');
-                        //set time and date if received
-                        if (response.servertime) {}
-                        // let dt = eval(response.servertime.replace('/',''));
-                        // console.log(dt);
-
-                        //wait for files 
-                        loadFiles();
-                        _settings2.default.saveSettings(response.settings);
-                        _settings2.default.savePatterns(response.patterns);
-                        if (canStartRoutine) {
-                            clearInterval(checkRoutineInterval);
-                            startDevice();
-                        } else {
-                            checkRoutineInterval = setInterval(function () {
-                                if (canStartRoutine) {
-                                    clearInterval(checkRoutineInterval);
-                                    startDevice();
-                                }
-                            }, 1000);
-                        }
-                    }).catch(function (err) {
-                        _util2.default.error(err);
-                    });
-                });
-            });
-        });
-    });
-}).then(function () {
-    _util2.default.log('No internet connection');
-    _board2.default.initialize().then(function () {
-        alert("Arduino ready!");
-    });
-});
-
 // client.checkConnection()
-//     .then(() => {
+//     .catch(() => {
 //         let status = new DeviceStatus();
 //         console.log('Connection established');
 //         selftest.checkIntegrity().then((result) => {
@@ -30387,10 +30672,11 @@ client.checkConnection().catch(function () {
 //                     } else {
 //                         console.log('Sound failed!');
 //                     }
+//                     Arduino.initialize().then(() => {
 //                         // read movement and voltage from arduino
-
-//                             status.battery='Volts: 4.998;Amps:225';
-
+//                         Arduino.readVoltage().then((res) => { 
+//                             status.battery='Volts:'+res.volts+';Amps:'+res.amps;
+//                         });
 //                         selftest.record().then((videofile) => {
 //                             //add data to a form and submit
 //                             let formData = new FormData();
@@ -30406,8 +30692,6 @@ client.checkConnection().catch(function () {
 //                             client.postFormData(formData)
 //                                 .then((response)=>{
 //                                     console.log('Data received from server');
-//                                     //destroy video control
-//                                     selftest.destroyVideo();
 //                                     //set time and date if received
 //                                     if(response.servertime){
 //                                         // let dt = eval(response.servertime.replace('/',''));
@@ -30424,7 +30708,7 @@ client.checkConnection().catch(function () {
 //                                         checkRoutineInterval = setInterval(()=>{
 //                                             if(canStartRoutine){
 //                                                 clearInterval(checkRoutineInterval);
-//                                                 startDevice();
+//                                                 startDevice()
 //                                             }
 //                                         },1000);
 //                                     }
@@ -30434,19 +30718,94 @@ client.checkConnection().catch(function () {
 //                                     console.error(err);
 //                                 });
 //                         });
+//                     });
 
 //                 });
 //         });
 
 //     })
-//     .catch(() => {
+//     .then(() => {
 //         console.log('No internet connection');
+//         Arduino.initialize().then(() => {
+//             alert("Arduino ready!");
+//         });
 //     });
+
+client.checkConnection().then(function () {
+    var status = new _status2.default();
+    _util2.default.log('Connection established');
+    selftest.checkIntegrity().then(function (result) {
+        if (result) {
+            status.integrity = true;
+            _util2.default.log('Integrity passed!');
+        } else {
+            _util2.default.log('Integrity failed!');
+        }
+        // sound check
+        selftest.checkSound().then(function (result) {
+            if (result) {
+                _util2.default.log('Sound passed!');
+                status.sound = true;
+            } else {
+                _util2.default.log('Sound failed!');
+            }
+            // read movement and voltage from arduino
+
+            status.battery = 'Volts: 4.998;Amps:225';
+
+            selftest.record().then(function (videofile) {
+                //add data to a form and submit
+                var formData = new FormData();
+                formData.append('sound', status.sound);
+                formData.append('product', status.integrity);
+                //TODO get data from device!!!
+                formData.append('mechanism', 1);
+                formData.append('battery', status.battery);
+                formData.append('activations', '258');
+                formData.append('id', deviceID);
+                var fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
+                formData.append('files', fileOfBlob);
+                client.postFormData(formData).then(function (response) {
+                    _util2.default.log('Data received from server');
+                    //destroy video control
+                    selftest.destroyVideo();
+                    //set time and date if received
+                    if (response.servertime) {}
+                    // let dt = eval(response.servertime.replace('/',''));
+                    // console.log(dt);
+
+                    //wait for files 
+                    loadFiles();
+                    _settings2.default.saveSettings(response.settings);
+                    _settings2.default.savePatterns(response.patterns);
+                    if (canStartRoutine) {
+                        clearInterval(checkRoutineInterval);
+                        startDevice();
+                    } else {
+                        checkRoutineInterval = setInterval(function () {
+                            if (canStartRoutine) {
+                                clearInterval(checkRoutineInterval);
+                                startDevice();
+                            }
+                        }, 1000);
+                    }
+                }).catch(function (err) {
+                    _util2.default.error(err);
+                });
+            });
+        });
+    });
+}).catch(function () {
+    _util2.default.log('No internet connection');
+});
 
 function startDevice() {
     _util2.default.info('Device started on' + new Date());
     _board2.default.listFiles().then(function () {
-        _board2.default.patternMove();
+        var debug = true;
+        if (!debug) {
+            _board2.default.startRoutine();
+        }
     });
 }
 
@@ -30506,12 +30865,18 @@ var Menu = function Menu() {
             _this.test.stopRoutine();
         }
     }));
-    devicemenu.append(new nw.MenuItem({
+    var editmenu = new nw.Menu();
+    editmenu.append(new nw.MenuItem({
         label: 'Device settings', click: function click() {
             _settings2.default.loadPage();
         }
     }));
-    devicemenu.append(new nw.MenuItem({
+    editmenu.append(new nw.MenuItem({
+        label: 'File patterns', click: function click() {
+            _settings2.default.loadPatternsPage();
+        }
+    }));
+    editmenu.append(new nw.MenuItem({
         label: 'Device status', click: function click() {
             _settings2.default.exit();
         }
@@ -30520,6 +30885,10 @@ var Menu = function Menu() {
     menu.append(new nw.MenuItem({
         label: 'Application',
         submenu: appmenu
+    }));
+    menu.append(new nw.MenuItem({
+        label: 'View',
+        submenu: editmenu
     }));
     menu.append(new nw.MenuItem({
         label: 'Device',
@@ -30619,7 +30988,29 @@ var HttpClient = function () {
 
             return new Promise(function (resolve, reject) {
                 $.ajax({
-                    url: _this3.baseUrl + '/api/index.php/utils/settings',
+                    url: _this3.baseUrl + '/api/index.php/utils/updatesettings',
+                    data: data,
+                    type: 'POST',
+                    contentType: 'application/json', // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
+                    processData: false, // NEEDED, DON'T OMIT THIS
+                    // ... Other options like success and etc
+                    success: function success(response) {
+                        resolve(response);
+                    },
+                    error: function error(err) {
+                        reject(err);
+                    }
+                });
+            });
+        }
+    }, {
+        key: 'postPattern',
+        value: function postPattern(fileid, data) {
+            var _this4 = this;
+
+            return new Promise(function (resolve, reject) {
+                $.ajax({
+                    url: _this4.baseUrl + '/api/index.php/files/pattern/' + fileid,
                     data: data,
                     type: 'POST',
                     contentType: 'application/json', // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
@@ -30637,11 +31028,11 @@ var HttpClient = function () {
     }, {
         key: 'getFiles',
         value: function getFiles(id) {
-            var _this4 = this;
+            var _this5 = this;
 
             return new Promise(function (resolve, reject) {
                 $.ajax({
-                    url: _this4.baseUrl + '/api/index.php/utils/melody/' + id,
+                    url: _this5.baseUrl + '/api/index.php/utils/melody/' + id,
                     type: 'GET',
                     success: function success(response) {
                         if (response == 'noupdates') {
@@ -30661,13 +31052,13 @@ var HttpClient = function () {
     }, {
         key: 'downloadMelodies',
         value: function downloadMelodies(id) {
-            var _this5 = this;
+            var _this6 = this;
 
             return new Promise(function (resolve, reject) {
 
-                var self = _this5;
+                var self = _this6;
                 var xhr = new XMLHttpRequest();
-                xhr.open('GET', _this5.baseUrl + '/api/index.php/utils/melody/' + id, true);
+                xhr.open('GET', _this6.baseUrl + '/api/index.php/utils/melody/' + id, true);
                 xhr.responseType = 'blob';
 
                 xhr.onload = function (e) {
@@ -30836,7 +31227,7 @@ var DeviceTest = function () {
                 document.querySelector('#myAudio').src = self.audioSel.value;
             });
             self.audioSel.innerHTML = '';
-            fs.readdir('Files', function (err, f) {
+            fs.readdir('C:/Device/Files', function (err, f) {
                 f.forEach(function (file) {
                     var opt = document.createElement('option');
                     opt.value = 'C:/Device/Files/' + file;
@@ -30854,11 +31245,14 @@ var DeviceTest = function () {
         }
     }, {
         key: 'stopRoutine',
-        value: function stopRoutine() {}
+        value: function stopRoutine() {
+            _board2.default.stopProcedure.apply(_board2.default, arguments);
+        }
     }, {
         key: 'startRoutine',
         value: function startRoutine() {
             this.disableControls();
+            _board2.default.startProcedure();
         }
     }, {
         key: 'enableControls',

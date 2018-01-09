@@ -34,7 +34,7 @@ export default class DeviceTest {
             document.querySelector('#myAudio').src = self.audioSel.value;
         });
         self.audioSel.innerHTML = '';
-        fs.readdir('Files', (err, f) => {
+        fs.readdir('C:/Device/Files', (err, f) => {
             f.forEach(file => {
                 let opt = document.createElement('option');
                 opt.value = 'C:/Device/Files/'+file;
@@ -50,10 +50,11 @@ export default class DeviceTest {
         this.enableControls();
     }
     stopRoutine() {
-
+        Arduino.stopProcedure.apply(Arduino,arguments);
     }
     startRoutine() {
         this.disableControls();
+        Arduino.startProcedure();
     }
 
     enableControls() {

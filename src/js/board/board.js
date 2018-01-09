@@ -9,6 +9,7 @@ import Util from './../util';
 class Arduino {
     board;
     constructor() {
+        let self = this;
         let player = document.querySelector('#myAudio');
         player.volume = 0.5;
         player.addEventListener('ended', () => {
@@ -18,7 +19,8 @@ class Arduino {
             this.melodyIndex++;
             if (this.melodyIndex >= this.files.length)
                 this.melodyIndex = 0;
-            if(this.canGoHome) this.goHome();
+            if (this.canGoHome) this.goHome();
+            this.lastRun = new Date().getSeconds();
         });
         this.canGoHome = false;
         this.isMoving = true;
@@ -26,6 +28,11 @@ class Arduino {
         this.routineInProgress = false;
         this.player = player;
         this.melodyIndex = 0;
+        // add cleanup if window closes
+        nw.Window.get().on('close', function () {
+            self.stopProcedure().then(() => this.close(true));
+            // this.close(true);
+        })
     }
     detectArduinoPort() {
         return new Promise((resolve) => {
@@ -68,7 +75,7 @@ class Arduino {
                     self.motorpin.high();
                     self.zeropin.read(function (error, value) {
                         self.zeroPinValue = value;
-                        if (value > 500 && !self.routineInProgress) {
+                        if (value > 500 && !self.routineInProgress && !self.motorIsMoving) {
                             self.move(0, 100, 2000, 0, 100);
                         } else {
                             //self.motorPosition = 0;
@@ -162,8 +169,8 @@ class Arduino {
             let self = this;
             self.routineInProgress = true;
             // this.motorpin.low();
-            this.stepper.rpm(800).cw().accel(0).decel(0).step(DeviceSettings.RANGE_MAX_POSITION, () => {
-                self.motorPosition = DeviceSettings.RANGE_MAX_POSITION;
+            this.stepper.rpm(800).cw().accel(0).decel(0).step(DeviceSettings.get('RANGE_MAX_POSITION'), () => {
+                self.motorPosition = DeviceSettings.get('RANGE_MAX_POSITION');
                 // self.motorpin.high();
                 resolve();
             });
@@ -174,7 +181,7 @@ class Arduino {
         let self = this;
         let dir = 0;
         let speed = 400;
-        let steps = DeviceSettings.SWING_MAX_RETRACT;
+        let steps = DeviceSettings.get('SWING_MAX_RETRACT');
         self.move(dir, steps, speed, 0, 0).then(() => {
             dir = dir === 0 ? 1 : 0;
             if (self.isPlaying) {
@@ -192,7 +199,7 @@ class Arduino {
         let dir = 0;
         let speed = 400;
         let steps = Math.round(Math.random() * 1000);
-        if(steps < 200) steps +=200;
+        if (steps < 200) steps += 200;
         self.move(dir, steps, speed, 0, 0).then(() => {
             // steps = Math.round(Math.random()*1000);
             dir = dir === 0 ? 1 : 0;
@@ -208,8 +215,6 @@ class Arduino {
     }
 
     patternMove() {
-        return new Promise((resolve)=>{
-
             let self = this;
             let patterns = DeviceSettings.getPatterns();
             let playingFile = this.files[this.melodyIndex];
@@ -217,59 +222,37 @@ class Arduino {
             let sets = pattern.pattern;
             let chain = Promise.resolve();
             let commands = [];
-            
+
             for (let index = 0; index < sets.length; index++) {
                 const p = sets[index];
                 let delay = p.pause;
                 let steps = Math.abs(p.distance);
                 let dir = p.distance >= 0 ? 1 : 0;
                 setTimeout(() => {
-                    if(self.isPlaying){
-                        chain = chain.then(()=>{
-                            self.move(dir,steps,600,0,0).then(()=>{
-                                if(index == sets.length -1){
-                                    resolve();
-                                }
-                            });
-                        });
-                    }else{
-                        self.goHome();
-                    }
+                    chain = chain.then(() => {
+                        self.move(dir, steps, 600, 0, 0);
+                    });
                 }, delay);
                 //commands.push(this.move.bind(this,dir,steps,600,0,0));
             }
-            // for(var func in commands){
-                //     chain = chain(func);
-                // }
-                console.log(pattern);
-            });
+           this.isDonePlaying().then(()=>{
+               this.goHome();
+           });
+            console.log(pattern);
     }
 
     mockMove(dir, steps, speed, accel, decel) {
         return new Promise((resolve) => {
-            setTimeout(() => { 
+            setTimeout(() => {
                 console.log('Dir:' + dir);
                 console.log('Steps:' + steps);
                 console.log('Speed:' + speed);
                 resolve();
-             }, 3000);
+            }, 3000);
         });
     }
 
-    lightOn(){
-        return new Promise(()=>{
-            this.ledpin.high(()=>{
-                resolve();
-            });
-        });
-    }
-    lightOff(){
-        return new Promise(()=>{
-            this.ledpin.low(()=>{
-                resolve();
-            });
-        });
-    }
+    
 
     listFiles() {
         let self = this;
@@ -299,21 +282,14 @@ class Arduino {
         return new Promise((resolve) => {
 
             this.board.i2cConfig();
-            this.board.i2cRead(0x68, 0x00, 7, function (res) {
+            this.board.i2cReadOance(0x68, 0x00, 7, function (res) {
                 var sec = (res[0] >> 4) * 10 + (res[0] & 0x0F); 				// seconds	
-
                 var min = (res[1] >> 4) * 10 + (res[1] & 0x0F); 				// minutes	
-
                 var hour = ((res[2] & 0x30) >> 4) * 10 + (res[2] & 0x0F); 	// hours	
-
                 var mode = (res[2] & 0x40) >> 6 ? "12h" : "24h"; 			// hour mode default 24
-
                 var day = res[3];											// day of week
-
                 var mday = (res[4] >> 4) * 10 + (res[4] & 0x0F); 				// day of month
-
                 var month = ((res[5] & 0x10) >> 4) * 10 + (res[5] & 0x0F);	// month
-
                 var year = (res[6] >> 4) * 10 + (res[6] & 0x0F);				// year
                 resolve(new Date(2000 + year, --month, mday, hour, min, sec));
             });
@@ -324,59 +300,168 @@ class Arduino {
     writeRTC() {
         let datetime = new Date();
         var bytes = [];
-
         bytes[0] = Math.floor(datetime.getSeconds() / 10) << 4 | datetime.getSeconds() % 10;
-
         bytes[1] = Math.floor(datetime.getMinutes() / 10) << 4 | datetime.getMinutes() % 10;
-
         bytes[2] = Math.floor(datetime.getHours() / 10) << 4 | datetime.getHours() % 10;
-
         bytes[3] = datetime.getDay() + 1;
-
         bytes[4] = Math.floor(datetime.getDate() / 10) << 4 | datetime.getDate() % 10;
-
         var month = datetime.getMonth() + 1;
-
         bytes[5] = Math.floor(month / 10) << 4 | month % 10;
-
         var year = datetime.getYear() % 100;
-
         bytes[6] = Math.floor(year / 10) << 4 | year % 10;
         this.board.i2cConfig();
-        this.board.i2cWrite(0x68,0x00,bytes);
+        this.board.i2cWrite(0x68, 0x00, bytes);
     }
 
     /**
      * ROUTINES
      */
-    runRoutine(){
+    runInOutRoutine(){
         this.motorpin.low();
-        this.extendMax().then(()=>{
-            this.lightOn();
+        this.extendMax().then(() => {
+           if(DeviceSettings.get('USE_BLITZ')) this.blinkLED();
+        });
+        this.playFile(this.melodyIndex);
+        this.isPlaying = true;
+        this.isDonePlaying().then(()=>{
+            this.goHome();
+        });
+    }
+    runRoutine() {
+        this.motorpin.low();
+        this.extendMax().then(() => {
+            if(DeviceSettings.get('USE_BLITZ')) this.blinkLED();
             this.bounce();
         });
         this.playFile(this.melodyIndex);
         this.isPlaying = true;
     }
-    runRandomRoutine(){
+    runRandomRoutine() {
         this.motorpin.low();
-        this.extendMax().then(()=>{
-            this.lightOn();
+        this.extendMax().then(() => {
+            if(DeviceSettings.get('USE_BLITZ')) this.blinkLED();
             this.bounceRandom();
         });
         this.playFile(this.melodyIndex);
         this.isPlaying = true;
     }
-    runPatternRoutine(){
+    runPatternRoutine() {
         this.motorpin.low();
-        this.extendMax().then(()=>{
-            this.lightOn();
-            this.patternMove().then(()=>{
-                if(this.isPlaying) this.canGoHome = true;
+        this.extendMax().then(() => {
+            if(DeviceSettings.get('USE_BLITZ')) this.blinkLED();
+            this.patternMove().then(() => {
+                //if (this.isPlaying) this.canGoHome = true;
             });
         });
         this.playFile(this.melodyIndex);
         this.isPlaying = true;
+    }
+
+    /**
+     * LIGHT ROUTINES
+     */
+    blinkLED(){
+        let count = parseInt(DeviceSettings.get('BLITZ_COUNT'));
+        if(count > 1){
+            let state = true;
+            let interval = parseInt(DeviceSettings.get('BLITZ_DELAY'));
+            this.lightInterval = setInterval(()=>{
+                if(state){
+                    this.lightOn();
+                    state = !state
+                }else{
+                    this.lightOff();
+                    state = !state;
+                }
+            });
+        }else{
+            this.lightOn();
+        }
+    }
+
+    lightOn() {
+        return new Promise(() => {
+            this.ledpin.high(() => {
+                resolve();
+            });
+        });
+    }
+
+    lightOff() {
+        return new Promise(() => {
+            this.ledpin.low(() => {
+                if(this.lightInterval){
+                    clearInterval(this.lightInterval);
+                    this.lightInterval = null;
+                }
+                resolve();
+            });
+        });
+    }
+
+
+    /**
+     * SHUTDOWN PROCEDURE
+     */
+    isDonePlaying() {
+        return new Promise((resolve) => {
+            let interv = setInterval(() => {
+                if (!this.isPlaying) {
+                    clearInterval(interv);
+                    resolve();
+                }
+            });
+        });
+    }
+    isMotorHome() {
+        return new Promise((resolve) => {
+            let interv = setInterval(() => {
+                if (!this.routineInProgress) {
+                    clearInterval(interv);
+                    resolve();
+                }
+            });
+        });
+    }
+    stopProcedure() {
+        return new Promise((resolve)=>{
+            this.player.pause();
+            clearInterval(this.moveInterval);
+            this.isPlaying = false;
+            this.isMotorHome().then(()=>{
+                resolve();
+            });
+        });
+    }
+    startProcedure(){
+        if(DeviceSettings.get('USE_MOTION_SENSOR')){
+            this.moveInterval = setInterval(()=>{
+                this.movepin.query((v)=>{
+                    this.sensorRead(v);
+                });
+            },100);
+        }else{
+            runLoop();
+        }
+    }
+    sensorRead(value){
+        let timestamp = new Date().getSeconds();
+        if(timestamp - this.lastRun > DeviceSettings.get('WAITING_TIME')/1000){
+            if(DeviceSettings.get('CONTINUOS_MOVE')){
+                if(DeviceSettings.get('USE_PATTERN_MOVEMENT')){
+                    this.runPatternRoutine();
+                }else if(DeviceSettings.get('USE_RANDOM_MOVEMENT')){
+                    this.runRandomRoutine();
+                }else{
+                    this.runRoutine();
+                }
+            }else{
+                this.runInOutRoutine();
+            }
+        }
+    }
+    runLoop(){
+
     }
 }
 export default new Arduino();

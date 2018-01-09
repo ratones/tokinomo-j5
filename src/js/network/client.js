@@ -51,7 +51,26 @@ export default class HttpClient {
     postSettings(data){
         return new Promise((resolve, reject) => {
             $.ajax({
-                url: this.baseUrl + '/api/index.php/utils/settings',
+                url: this.baseUrl + '/api/index.php/utils/updatesettings',
+                data: data,
+                type: 'POST',
+                contentType: 'application/json', // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
+                processData: false, // NEEDED, DON'T OMIT THIS
+                // ... Other options like success and etc
+                success: (response) => {
+                    resolve(response);
+                },
+                error: (err) => {
+                    reject(err);
+                }
+            });
+        });
+    }
+
+    postPattern(fileid,data){
+        return new Promise((resolve, reject) => {
+            $.ajax({
+                url: this.baseUrl + '/api/index.php/files/pattern/'+fileid,
                 data: data,
                 type: 'POST',
                 contentType: 'application/json', // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)

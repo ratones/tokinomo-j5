@@ -4,6 +4,10 @@ html,body{
     margin:0 auto;
 }
 
+button{
+    margin:0 10px 10px 0;
+}
+
 #layout{
     width: fit-content;
     margin: 0 auto;
@@ -80,4 +84,13 @@ html,body{
 .settings-buttons{
     display: flex;
     justify-content: space-evenly;
+}
+.file-patterns{
+    display:table;
+}
+.patern-row{
+    display:table-row;
+}
+.patern-column{
+    display:table-cell;
 }
