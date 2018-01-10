@@ -29560,25 +29560,6 @@ var Arduino = function () {
 
         _classCallCheck(this, Arduino);
 
-        this.setAlarmOne = function (datetime) {
-
-            if (!datetime instanceof Date) throw new Error();
-            var bytes = [];
-            this.rtc.readBytes(0x07, 0x0B, function (err, res) {
-                bytes[0] = res[0] & 0x80;
-                bytes[1] = res[1] & 0x80;
-                bytes[2] = res[2] & 0x80;
-                bytes[3] = res[3] & 0x80;
-
-                bytes[0] |= Math.floor(datetime.getSeconds() / 10) << 4 | datetime.getSeconds() % 10;
-                bytes[1] |= Math.floor(datetime.getMinutes() / 10) << 4 | datetime.getMinutes() % 10;
-                bytes[2] |= Math.floor(datetime.getHours() / 10) << 4 | datetime.getHours() % 10;
-                bytes[3] |= Math.floor(datetime.getDate() / 10) << 4 | datetime.getDate() % 10;
-            });
-            this.board.i2cConfig();
-            this.board.i2cWrite(0x07, bytes);
-        };
-
         var self = this;
         var player = document.querySelector('#myAudio');
         player.volume = 0.5;
@@ -29955,9 +29936,38 @@ var Arduino = function () {
             this.board.i2cWrite(0x68, register, [byte]);
         }
     }, {
+        key: 'disableAlarmOne',
+        value: function disableAlarmOne() {
+            this.alterRegister(0x0E, 0xFE, "clear");
+        }
+    }, {
         key: 'enableAlarmOne',
         value: function enableAlarmOne() {
             this.alterRegister(0x0E, 0x01, "set");
+        }
+    }, {
+        key: 'setAlarmOne',
+        value: function setAlarmOne(datetime) {
+            // let ppin = new five.Pin(12);
+            // ppin.low();
+            var self = this;
+            if (!datetime instanceof Date) throw new Error();
+            var bytes = [];
+            this.board.i2cConfig();
+            // this.board.i2cReadOnce(0x68, 0x07, 4, function(err, res) {
+            //     bytes[0] = res[0] & 0x80;
+            //     bytes[1] = res[1] & 0x80;
+            //     bytes[2] = res[2] & 0x80;
+            //     bytes[3] = res[3] & 0x80;    
+            bytes[0] |= Math.floor(datetime.getSeconds() / 10) << 4 | datetime.getSeconds() % 10;
+            bytes[1] |= Math.floor(datetime.getMinutes() / 10) << 4 | datetime.getMinutes() % 10;
+            bytes[2] |= Math.floor(datetime.getHours() / 10) << 4 | datetime.getHours() % 10;
+            bytes[3] |= Math.floor(datetime.getDate() / 10) << 4 | datetime.getDate() % 10;
+            console.log(bytes);
+            // self.board.i2cConfig();
+            self.board.i2cWrite(0x68, 0x07, bytes);
+            self.board.i2cWrite(0x68, 0x0E, [0xFE]);
+            // });
         }
     }, {
         key: 'runInOutRoutine',
@@ -31361,23 +31371,31 @@ var DeviceTest = function () {
     }, {
         key: 'moveCustomMotor',
         value: function moveCustomMotor() {
-            var dir = Number(this.dirCtl.value);
-            var speedChar = this.speedCtl.value;
-            var steps = Number(this.stepsCtl.value);
-            var speed = 300;
-            switch (speedChar) {
-                case 'low':
-                    speed = 200;
-                    break;
-                case 'medium':
-                    speed = 400;
-                    break;
-                case 'high':
-                    speed = 600;
-                    break;
-            }
-            _board2.default.routineInProgress = true;
-            _board2.default.move(dir, steps, speed, 0, 0);
+            // let dir = Number(this.dirCtl.value);
+            // let speedChar = this.speedCtl.value;
+            // let steps = Number(this.stepsCtl.value);
+            // let speed = 300;
+            // switch(speedChar){
+            //     case 'low':
+            //     speed = 200;
+            //     break;
+            //     case 'medium':
+            //     speed = 400;
+            //     break;
+            //     case 'high':
+            //     speed = 600;
+            //     break;
+            // }
+            // Arduino.routineInProgress = true;
+            // Arduino.move(dir,steps,speed,0,0);
+            var alarm = this.stepsCtl.value.split(':');
+            var h = parseInt(alarm[0]);
+            var m = parseInt(alarm[1]);
+            var dt = new Date();
+            dt.setHours(h);
+            dt.setMinutes(m);
+            //Arduino.disableAlarmOne();
+            _board2.default.setAlarmOne.call(_board2.default, dt);
         }
     }, {
         key: 'extendMotor',

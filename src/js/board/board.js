@@ -336,27 +336,33 @@ class Arduino {
     
         this.board.i2cWrite(0x68,register, [ byte ]);
     }
+    disableAlarmOne(){
+        this.alterRegister(0x0E, 0xFE, "clear");
+    }
     enableAlarmOne() {
         this.alterRegister(0x0E, 0x01, "set");
     }
-    setAlarmOne = function(datetime) {
-
+    setAlarmOne(datetime) {
+        // let ppin = new five.Pin(12);
+        // ppin.low();
+        let self = this;
         if(!datetime instanceof Date) throw new Error();
         var bytes = []; 
-        this.rtc.readBytes(0x07, 0x0B, function(err, res) {
-            bytes[0] = res[0] & 0x80;
-            bytes[1] = res[1] & 0x80;
-            bytes[2] = res[2] & 0x80;
-            bytes[3] = res[3] & 0x80;
-    
-    
+        this.board.i2cConfig();
+        // this.board.i2cReadOnce(0x68, 0x07, 4, function(err, res) {
+        //     bytes[0] = res[0] & 0x80;
+        //     bytes[1] = res[1] & 0x80;
+        //     bytes[2] = res[2] & 0x80;
+        //     bytes[3] = res[3] & 0x80;    
             bytes[0] |= Math.floor(datetime.getSeconds()/10) << 4 | datetime.getSeconds()%10;
             bytes[1] |= Math.floor(datetime.getMinutes()/10) << 4 | datetime.getMinutes()%10;
             bytes[2] |= Math.floor(datetime.getHours()/10) << 4 | datetime.getHours()%10;
             bytes[3] |= Math.floor(datetime.getDate()/10) << 4 | datetime.getDate()%10;
-        });
-        this.board.i2cConfig();
-        this.board.i2cWrite(0x07, bytes);   
+            console.log(bytes);
+            // self.board.i2cConfig();
+            self.board.i2cWrite(0x68, 0x07, bytes); 
+            self.board.i2cWrite(0x68,0x0E,[0xFE]) ; 
+        // });
     };
     /**
      * ROUTINES

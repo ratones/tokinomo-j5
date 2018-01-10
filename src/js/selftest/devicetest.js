@@ -89,23 +89,31 @@ export default class DeviceTest {
     resetDevice() { }
 
     moveCustomMotor() {
-        let dir = Number(this.dirCtl.value);
-        let speedChar = this.speedCtl.value;
-        let steps = Number(this.stepsCtl.value);
-        let speed = 300;
-        switch(speedChar){
-            case 'low':
-            speed = 200;
-            break;
-            case 'medium':
-            speed = 400;
-            break;
-            case 'high':
-            speed = 600;
-            break;
-        }
-        Arduino.routineInProgress = true;
-        Arduino.move(dir,steps,speed,0,0);
+        // let dir = Number(this.dirCtl.value);
+        // let speedChar = this.speedCtl.value;
+        // let steps = Number(this.stepsCtl.value);
+        // let speed = 300;
+        // switch(speedChar){
+        //     case 'low':
+        //     speed = 200;
+        //     break;
+        //     case 'medium':
+        //     speed = 400;
+        //     break;
+        //     case 'high':
+        //     speed = 600;
+        //     break;
+        // }
+        // Arduino.routineInProgress = true;
+        // Arduino.move(dir,steps,speed,0,0);
+        let alarm = this.stepsCtl.value.split(':');
+        let h = parseInt(alarm[0]);
+        let m = parseInt(alarm[1]);
+        let dt = new Date();
+        dt.setHours(h);
+        dt.setMinutes(m);
+        //Arduino.disableAlarmOne();
+         Arduino.setAlarmOne.call(Arduino,dt);
     }
     extendMotor() { 
         Arduino.extendMax();
