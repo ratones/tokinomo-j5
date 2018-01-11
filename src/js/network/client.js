@@ -1,5 +1,6 @@
 import * as $ from 'jquery';
 import console from './../util';
+import DeviceSettings from './../board/settings'
 let path = nw.require('path');
 let os = nw.require('os');
 var exec = nw.require('child_process').exec;
@@ -10,7 +11,7 @@ var AdmZip = nw.require('adm-zip');
 
 export default class HttpClient {
     constructor() {
-        this.checkUrl = 'http://www.tokinomo.com';
+        this.checkUrl = 'http://www.tokinomo.com?'+new Date();
         this.baseUrl = 'http://www.monitor.tokinomo.com';
     }
 
@@ -20,7 +21,7 @@ export default class HttpClient {
                 url: this.checkUrl,
                 type: 'GET',
                 success: () => {
-                    resolve();
+                    resolve(true);
                 },
                 error: () => {
                     reject();
@@ -34,6 +35,34 @@ export default class HttpClient {
             $.ajax({
                 url: this.baseUrl + '/api/index.php/utils/updates',
                 data: data,
+                type: 'POST',
+                contentType: false, // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
+                processData: false, // NEEDED, DON'T OMIT THIS
+                // ... Other options like success and etc
+                success: (response) => {
+                    resolve(response);
+                },
+                error: (err) => {
+                    reject(err);
+                }
+            });
+        });
+    }
+
+    postActivations(){
+        return new Promise((resolve,reject)=>{
+
+            let deviceID = DeviceSettings.persistKey('deviceID');
+            let formData = new FormData();
+            formData.append('id', deviceID);
+            let blob = fs.readFileSync('C:/Device/activations.txt');
+            let dt = new Date();
+            let date = String(dt.getDate())+String((dt.getMonth()+1))+String(dt.getFullYear())+'_'+String(dt.getHours())+String(dt.getMinutes())+String(dt.getSeconds());
+            let fileOfBlob = new File([blob], 'Activations' + deviceID + '_'+ date +'.txt');
+            formData.append('files', fileOfBlob);
+            $.ajax({
+                url: this.baseUrl + '/api/index.php/utils/uploadactivations',
+                data: formData,
                 type: 'POST',
                 contentType: false, // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
                 processData: false, // NEEDED, DON'T OMIT THIS
@@ -97,6 +126,22 @@ export default class HttpClient {
                     } else {
                         setTimeout(() => { resolve() }, 2000);
                     }
+                },
+                error: () => {
+                    resolve();
+                }
+            });
+        });
+    }
+
+    getStatus(){
+        let deviceID = DeviceSettings.persistKey('deviceID');
+        return new Promise((resolve, reject) => {
+            $.ajax({
+                url: this.baseUrl + '/api/index.php/utils/statusrequest/' + deviceID,
+                type: 'GET',
+                success: (response) => {
+                   resolve(response);
                 },
                 error: () => {
                     resolve();

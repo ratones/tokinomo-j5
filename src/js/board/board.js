@@ -3,6 +3,7 @@ let SerialPort = nw.require('browser-serialport');
 let fs = nw.require('fs');
 
 import DeviceSettings from './../board/settings';
+import FileSystem from './filesystem';
 
 import Util from './../util';
 
@@ -496,7 +497,7 @@ class Arduino {
         }
     }
     sensorRead(){
-        let timestamp = new Date().getSeconds();
+        FileSystem.writeActivation();
         if(this.routineInProgress)  return;
         if(this.timeoutPassed){
             this.timeoutPassed = false;
@@ -515,6 +516,12 @@ class Arduino {
     }
     runLoop(){
         console.log('not suposed to rich here')
+    }
+
+    powerUSB(){
+        return new Promise((resolve, reject) => {
+            resolve();
+        });
     }
 }
 export default new Arduino();

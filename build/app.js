@@ -29542,6 +29542,10 @@ var _settings = require('./../board/settings');
 
 var _settings2 = _interopRequireDefault(_settings);
 
+var _filesystem = require('./filesystem');
+
+var _filesystem2 = _interopRequireDefault(_filesystem);
+
 var _util = require('./../util');
 
 var _util2 = _interopRequireDefault(_util);
@@ -30147,7 +30151,7 @@ var Arduino = function () {
     }, {
         key: 'sensorRead',
         value: function sensorRead() {
-            var timestamp = new Date().getSeconds();
+            _filesystem2.default.writeActivation();
             if (this.routineInProgress) return;
             if (this.timeoutPassed) {
                 this.timeoutPassed = false;
@@ -30169,6 +30173,13 @@ var Arduino = function () {
         value: function runLoop() {
             console.log('not suposed to rich here');
         }
+    }, {
+        key: 'powerUSB',
+        value: function powerUSB() {
+            return new Promise(function (resolve, reject) {
+                resolve();
+            });
+        }
     }]);
 
     return Arduino;
@@ -30176,7 +30187,50 @@ var Arduino = function () {
 
 exports.default = new Arduino();
 
-},{"./../board/settings":9,"./../util":16}],9:[function(require,module,exports){
+},{"./../board/settings":10,"./../util":17,"./filesystem":9}],9:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _settings = require('./settings');
+
+var _settings2 = _interopRequireDefault(_settings);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var fs = nw.require('fs');
+
+var FileSystem = function () {
+    function FileSystem() {
+        _classCallCheck(this, FileSystem);
+    }
+
+    _createClass(FileSystem, [{
+        key: 'writeActivation',
+        value: function writeActivation() {
+            var activations = _settings2.default.persistKey('activations');
+            if (!activations) activations = 0;
+            activations++;
+            var dt = new Date();
+            var date = dt.getDate() + '.' + (dt.getMonth() + 1) + '.' + dt.getFullYear();
+            var time = dt.getHours() + ':' + dt.getMinutes() + ':' + dt.getSeconds();
+            fs.appendFileSync('C:/Device/activations.txt', '\r\n' + activations + '\t' + date + '\t' + time);
+            _settings2.default.persistKey('activations', activations);
+        }
+    }]);
+
+    return FileSystem;
+}();
+
+exports.default = new FileSystem();
+
+},{"./settings":10}],10:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -30682,7 +30736,7 @@ var DeviceSettings = function () {
 
 exports.default = new DeviceSettings();
 
-},{"./../network/client":12,"./board":8,"lodash":7}],10:[function(require,module,exports){
+},{"./../network/client":13,"./board":8,"lodash":7}],11:[function(require,module,exports){
 'use strict';
 
 var _index = require('./selftest/index');
@@ -30705,10 +30759,6 @@ var _settings = require('./board/settings');
 
 var _settings2 = _interopRequireDefault(_settings);
 
-var _util = require('./util');
-
-var _util2 = _interopRequireDefault(_util);
-
 var _menu = require('./menu');
 
 var _menu2 = _interopRequireDefault(_menu);
@@ -30716,6 +30766,8 @@ var _menu2 = _interopRequireDefault(_menu);
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 var menu = new _menu2.default();
+// import console from './util';
+
 var client = new _client2.default();
 var selftest = new _index2.default();
 var canStartRoutine = false;
@@ -30809,28 +30861,28 @@ if (!deviceID) {
 
 client.checkConnection().then(function () {
     var status = new _status2.default();
-    _util2.default.log('Connection established');
+    console.log('Connection established');
     selftest.checkIntegrity().then(function (result) {
         if (result) {
             status.integrity = true;
-            _util2.default.log('Integrity passed!');
+            console.log('Integrity passed!');
         } else {
-            _util2.default.log('Integrity failed!');
+            console.log('Integrity failed!');
         }
         // sound check
         selftest.checkSound().then(function (result) {
             if (result) {
-                _util2.default.log('Sound passed!');
+                console.log('Sound passed!');
                 status.sound = true;
             } else {
-                _util2.default.log('Sound failed!');
+                console.log('Sound failed!');
             }
             // read movement and voltage from arduino
-            _board2.default.initialize().then(function () {
-                _board2.default.readVoltage().then(function (res) {
-                    status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
-                });
-            });
+            // Arduino.initialize().then(() => {
+            //     Arduino.readVoltage().then((res) => {
+            //         status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
+            //     });
+            // });
 
             selftest.record().then(function (videofile) {
                 //add data to a form and submit
@@ -30845,14 +30897,17 @@ client.checkConnection().then(function () {
                 var fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
                 formData.append('files', fileOfBlob);
                 client.postFormData(formData).then(function (response) {
-                    _util2.default.log('Data received from server');
+                    console.log('Data received from server');
                     //destroy video control
                     selftest.destroyVideo();
                     //set time and date if received
-                    if (response.servertime) {}
-                    // let dt = eval(response.servertime.replace('/',''));
-                    // console.log(dt);
-
+                    if (response.servertime) {
+                        // let dt = eval(response.servertime.replace('/',''));
+                        // console.log(dt);
+                    }
+                    if (response.activations_request) {
+                        saveActivations();
+                    }
                     //wait for files 
                     loadFiles();
                     _settings2.default.saveSettings(response.settings);
@@ -30865,25 +30920,83 @@ client.checkConnection().then(function () {
                             if (canStartRoutine) {
                                 clearInterval(checkRoutineInterval);
                                 startDevice();
+                                startNetworkPolling();
                             }
                         }, 1000);
                     }
                 }).catch(function (err) {
-                    _util2.default.error(err);
+                    startNetworkPolling();
+                    console.error(err);
                 });
             });
         });
     });
 }).catch(function () {
-    _util2.default.log('No internet connection');
+    startDevice();
+    var tryes = 0;
+    console.log('No internet connection');
+    //try to connect with GPRS 10 times
+    var checkinterval = null;
+    _board2.default.powerUSB().then(function () {
+        console.log('Start GPRS connection');
+        setTimeout(function () {
+            client.checkConnection().catch(function () {
+                // try every 10 seconds
+                checkinterval = setInterval(function () {
+                    tryes++;
+                    if (tryes > 10) {
+                        clearInterval(checkinterval);
+                        console.log('GPRS connection established');
+                    }
+                    client.checkConnection().then(function (res) {
+                        if (res) {
+                            clearInterval(checkinterval);
+                            console.log('GPRS connection established');
+                            startNetworkPolling();
+                        }
+                    });
+                }, 10000);
+            }).then(function () {
+                startNetworkPolling();
+            });
+        }, 30000);
+    });
 });
 
+function startNetworkPolling() {
+    setInterval(function () {
+
+        client.getStatus().then(function (result) {
+            /**
+             * if requested status we stop routine
+             * get status and activations then start routine again
+             */
+            console.log(result);
+            if (result.request_status || result.request_activations || result.request_reset) {
+                //Arduino.stopProcedure().then(() => {
+                if (result.request_status) {
+                    // perform selfcheck then flag to restart arduino
+                }
+                if (result.request_reset) {
+                    selftest.resetDevice();
+                }
+                if (result.request_activations) {
+                    client.postActivations().then(function () {
+                        //ready to start arduino
+                    });
+                }
+                // });
+            }
+        });
+    }, 30000);
+}
+
 function startDevice() {
-    _util2.default.info('Device started on' + new Date());
+    console.info('Device started on' + new Date());
     _board2.default.listFiles().then(function () {
         var debug = true;
         if (!debug) {
-            _board2.default.startRoutine();
+            //Arduino.startRoutine();
         }
     });
 }
@@ -30894,7 +31007,11 @@ function loadFiles() {
     });
 }
 
-},{"./board/board":8,"./board/settings":9,"./menu":11,"./network/client":12,"./selftest/index":14,"./selftest/status":15,"./util":16}],11:[function(require,module,exports){
+function saveActivations() {
+    client.postActivations();
+}
+
+},{"./board/board":8,"./board/settings":10,"./menu":12,"./network/client":13,"./selftest/index":15,"./selftest/status":16}],12:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -30980,7 +31097,7 @@ var Menu = function Menu() {
 
 exports.default = Menu;
 
-},{"./board/settings":9,"./selftest/devicetest":13}],12:[function(require,module,exports){
+},{"./board/settings":10,"./selftest/devicetest":14}],13:[function(require,module,exports){
 (function (process,Buffer){
 'use strict';
 
@@ -30997,6 +31114,10 @@ var $ = _interopRequireWildcard(_jquery);
 var _util = require('./../util');
 
 var _util2 = _interopRequireDefault(_util);
+
+var _settings = require('./../board/settings');
+
+var _settings2 = _interopRequireDefault(_settings);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -31016,7 +31137,7 @@ var HttpClient = function () {
     function HttpClient() {
         _classCallCheck(this, HttpClient);
 
-        this.checkUrl = 'http://www.tokinomo.com';
+        this.checkUrl = 'http://www.tokinomo.com?' + new Date();
         this.baseUrl = 'http://www.monitor.tokinomo.com';
     }
 
@@ -31030,7 +31151,7 @@ var HttpClient = function () {
                     url: _this.checkUrl,
                     type: 'GET',
                     success: function success() {
-                        resolve();
+                        resolve(true);
                     },
                     error: function error() {
                         reject();
@@ -31061,13 +31182,44 @@ var HttpClient = function () {
             });
         }
     }, {
-        key: 'postSettings',
-        value: function postSettings(data) {
+        key: 'postActivations',
+        value: function postActivations() {
             var _this3 = this;
 
             return new Promise(function (resolve, reject) {
+
+                var deviceID = _settings2.default.persistKey('deviceID');
+                var formData = new FormData();
+                formData.append('id', deviceID);
+                var blob = fs.readFileSync('C:/Device/activations.txt');
+                var dt = new Date();
+                var date = String(dt.getDate()) + String(dt.getMonth() + 1) + String(dt.getFullYear()) + '_' + String(dt.getHours()) + String(dt.getMinutes()) + String(dt.getSeconds());
+                var fileOfBlob = new File([blob], 'Activations' + deviceID + '_' + date + '.txt');
+                formData.append('files', fileOfBlob);
                 $.ajax({
-                    url: _this3.baseUrl + '/api/index.php/utils/updatesettings',
+                    url: _this3.baseUrl + '/api/index.php/utils/uploadactivations',
+                    data: formData,
+                    type: 'POST',
+                    contentType: false, // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
+                    processData: false, // NEEDED, DON'T OMIT THIS
+                    // ... Other options like success and etc
+                    success: function success(response) {
+                        resolve(response);
+                    },
+                    error: function error(err) {
+                        reject(err);
+                    }
+                });
+            });
+        }
+    }, {
+        key: 'postSettings',
+        value: function postSettings(data) {
+            var _this4 = this;
+
+            return new Promise(function (resolve, reject) {
+                $.ajax({
+                    url: _this4.baseUrl + '/api/index.php/utils/updatesettings',
                     data: data,
                     type: 'POST',
                     contentType: 'application/json', // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
@@ -31085,11 +31237,11 @@ var HttpClient = function () {
     }, {
         key: 'postPattern',
         value: function postPattern(fileid, data) {
-            var _this4 = this;
+            var _this5 = this;
 
             return new Promise(function (resolve, reject) {
                 $.ajax({
-                    url: _this4.baseUrl + '/api/index.php/files/pattern/' + fileid,
+                    url: _this5.baseUrl + '/api/index.php/files/pattern/' + fileid,
                     data: data,
                     type: 'POST',
                     contentType: 'application/json', // NEEDED, DON'T OMIT THIS (requires jQuery 1.6+)
@@ -31107,11 +31259,11 @@ var HttpClient = function () {
     }, {
         key: 'getFiles',
         value: function getFiles(id) {
-            var _this5 = this;
+            var _this6 = this;
 
             return new Promise(function (resolve, reject) {
                 $.ajax({
-                    url: _this5.baseUrl + '/api/index.php/utils/melody/' + id,
+                    url: _this6.baseUrl + '/api/index.php/utils/melody/' + id,
                     type: 'GET',
                     success: function success(response) {
                         if (response == 'noupdates') {
@@ -31129,15 +31281,34 @@ var HttpClient = function () {
             });
         }
     }, {
+        key: 'getStatus',
+        value: function getStatus() {
+            var _this7 = this;
+
+            var deviceID = _settings2.default.persistKey('deviceID');
+            return new Promise(function (resolve, reject) {
+                $.ajax({
+                    url: _this7.baseUrl + '/api/index.php/utils/statusrequest/' + deviceID,
+                    type: 'GET',
+                    success: function success(response) {
+                        resolve(response);
+                    },
+                    error: function error() {
+                        resolve();
+                    }
+                });
+            });
+        }
+    }, {
         key: 'downloadMelodies',
         value: function downloadMelodies(id) {
-            var _this6 = this;
+            var _this8 = this;
 
             return new Promise(function (resolve, reject) {
 
-                var self = _this6;
+                var self = _this8;
                 var xhr = new XMLHttpRequest();
-                xhr.open('GET', _this6.baseUrl + '/api/index.php/utils/melody/' + id, true);
+                xhr.open('GET', _this8.baseUrl + '/api/index.php/utils/melody/' + id, true);
                 xhr.responseType = 'blob';
 
                 xhr.onload = function (e) {
@@ -31243,7 +31414,7 @@ var HttpClient = function () {
 exports.default = HttpClient;
 
 }).call(this,require('_process'),require("buffer").Buffer)
-},{"./../util":16,"_process":2,"buffer":3,"jquery":6}],13:[function(require,module,exports){
+},{"./../board/settings":10,"./../util":17,"_process":2,"buffer":3,"jquery":6}],14:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -31259,6 +31430,14 @@ var $ = _interopRequireWildcard(_jquery);
 var _board = require('./../board/board');
 
 var _board2 = _interopRequireDefault(_board);
+
+var _filesystem = require('./../board/filesystem');
+
+var _filesystem2 = _interopRequireDefault(_filesystem);
+
+var _settings = require('./../board/settings');
+
+var _settings2 = _interopRequireDefault(_settings);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -31367,7 +31546,12 @@ var DeviceTest = function () {
         }
     }, {
         key: 'resetDevice',
-        value: function resetDevice() {}
+        value: function resetDevice() {
+            fs.unlink('C:/Device/reference.png');
+            fs.unlink('C:/Device/compare.png');
+            fs.unlink('C:/Device/activations.txt');
+            _settings2.default.persistKey('activations', '0');
+        }
     }, {
         key: 'moveCustomMotor',
         value: function moveCustomMotor() {
@@ -31400,7 +31584,8 @@ var DeviceTest = function () {
     }, {
         key: 'extendMotor',
         value: function extendMotor() {
-            _board2.default.extendMax();
+            // Arduino.extendMax();
+            _filesystem2.default.writeActivation();
         }
     }, {
         key: 'goHomeMotor',
@@ -31464,7 +31649,7 @@ var DeviceTest = function () {
 
 exports.default = DeviceTest;
 
-},{"./../board/board":8,"jquery":6}],14:[function(require,module,exports){
+},{"./../board/board":8,"./../board/filesystem":9,"./../board/settings":10,"jquery":6}],15:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -31476,6 +31661,10 @@ var _createClass = function () { function defineProperties(target, props) { for 
 var _camhandler = require('../webcam/camhandler');
 
 var _camhandler2 = _interopRequireDefault(_camhandler);
+
+var _settings = require('./../board/settings');
+
+var _settings2 = _interopRequireDefault(_settings);
 
 var _util = require('./../util');
 
@@ -31599,13 +31788,15 @@ var SelfTest = function () {
         value: function resetDevice() {
             fs.unlink('C:/Device/reference.png');
             fs.unlink('C:/Device/compare.png');
+            fs.unlink('C:/Device/activations.txt');
+            _settings2.default.persistKey('activations', 0);
         }
     }, {
         key: 'processAudio',
         value: function processAudio() {
-            var _this4 = this,
-                _arguments = arguments;
+            var _this4 = this;
 
+            var self = this;
             return new Promise(function (resolve) {
 
                 window.AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -31619,7 +31810,7 @@ var SelfTest = function () {
                     navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
 
                     // ask for an audio input
-                    navigator.webkitGetUserMedia({
+                    navigator.getUserMedia({
                         "audio": {
                             "mandatory": {
                                 "googEchoCancellation": "false",
@@ -31629,11 +31820,7 @@ var SelfTest = function () {
                             },
                             "optional": []
                         }
-                    }, _this4.onMicrophoneGranted.apply(_this4, [].push.call(_arguments, function () {
-                        resolve(true);
-                    })), _this4.onMicrophoneDenied.apply(_this4, [].push.call(_arguments, function () {
-                        resolve(false);
-                    })));
+                    }, self.onMicrophoneGranted, self.onMicrophoneDenied);
                 } catch (e) {
                     _util2.default.warn('getUserMedia threw exception :' + e);
                     resolve(false);
@@ -31747,7 +31934,7 @@ var SelfTest = function () {
 
 exports.default = SelfTest;
 
-},{"../webcam/camhandler":17,"./../util":16}],15:[function(require,module,exports){
+},{"../webcam/camhandler":18,"./../board/settings":10,"./../util":17}],16:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -31768,7 +31955,7 @@ var DeviceStatus = function DeviceStatus() {
 
 exports.default = DeviceStatus;
 
-},{}],16:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -31842,7 +32029,7 @@ var console = function () {
 
 exports.default = new console();
 
-},{}],17:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -31993,4 +32180,4 @@ var CamHandler = function () {
 
 exports.default = CamHandler;
 
-},{"./../util":16}]},{},[10]);
+},{"./../util":17}]},{},[11]);

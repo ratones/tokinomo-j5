@@ -3,7 +3,7 @@ import DeviceStatus from './selftest/status';
 import HttpClient from './network/client';
 import Arduino from './board/board';
 import Settings from './board/settings';
-import console from './util';
+// import console from './util';
 import Menu from './menu';
 
 
@@ -122,11 +122,11 @@ client.checkConnection()
                         console.log('Sound failed!');
                     }
                     // read movement and voltage from arduino
-                    Arduino.initialize().then(() => {
-                        Arduino.readVoltage().then((res) => {
-                            status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
-                        });
-                    });
+                    // Arduino.initialize().then(() => {
+                    //     Arduino.readVoltage().then((res) => {
+                    //         status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
+                    //     });
+                    // });
 
                     selftest.record().then((videofile) => {
                         //add data to a form and submit
@@ -150,6 +150,9 @@ client.checkConnection()
                                     // let dt = eval(response.servertime.replace('/',''));
                                     // console.log(dt);
                                 }
+                                if (response.activations_request) {
+                                    saveActivations();
+                                }
                                 //wait for files 
                                 loadFiles();
                                 Settings.saveSettings(response.settings);
@@ -162,12 +165,14 @@ client.checkConnection()
                                         if (canStartRoutine) {
                                             clearInterval(checkRoutineInterval);
                                             startDevice();
+                                            startNetworkPolling();
                                         }
                                     }, 1000);
                                 }
 
                             })
                             .catch((err) => {
+                                startNetworkPolling();
                                 console.error(err);
                             });
                     });
@@ -177,15 +182,72 @@ client.checkConnection()
 
     })
     .catch(() => {
+        startDevice();
+        let tryes = 0;
         console.log('No internet connection');
+        //try to connect with GPRS 10 times
+        let checkinterval = null;
+        Arduino.powerUSB().then(() => {
+            console.log('Start GPRS connection');
+            setTimeout(() => {
+                client.checkConnection().catch(() => {
+                    // try every 10 seconds
+                    checkinterval = setInterval(() => {
+                        tryes++;
+                        if (tryes > 10) {
+                            clearInterval(checkinterval);
+                            console.log('GPRS connection established');
+                        }
+                        client.checkConnection().then(res => {
+                            if (res) {
+                                clearInterval(checkinterval);
+                                console.log('GPRS connection established');
+                                startNetworkPolling();
+                            }
+                        });
+                    }, 10000);
+
+                }).then(() => {
+                    startNetworkPolling();
+                });
+            }, 30000);
+        });
     });
+
+function startNetworkPolling() {
+    setInterval(()=>{
+
+        client.getStatus().then((result) => {
+            /**
+             * if requested status we stop routine
+             * get status and activations then start routine again
+             */
+            console.log(result);
+            if (result.request_status || result.request_activations || result.request_reset) {
+                //Arduino.stopProcedure().then(() => {
+                    if (result.request_status) {
+                        // perform selfcheck then flag to restart arduino
+                    }
+                    if (result.request_reset) {
+                        selftest.resetDevice();
+                    }
+                    if (result.request_activations) {
+                        client.postActivations().then(() => {
+                            //ready to start arduino
+                        });
+                    }
+                    // });
+                }
+            })
+        },30000);
+}
 
 function startDevice() {
     console.info('Device started on' + new Date());
     Arduino.listFiles().then(() => {
         let debug = true;
         if (!debug) {
-            Arduino.startRoutine();
+            //Arduino.startRoutine();
         }
     });
 }
@@ -194,4 +256,8 @@ function loadFiles() {
     client.downloadMelodies(deviceID).then(() => {
         canStartRoutine = true;
     });
+}
+
+function saveActivations() {
+    client.postActivations();
 }

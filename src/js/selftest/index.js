@@ -1,4 +1,5 @@
 import CamHandler from '../webcam/camhandler';
+import DeviceSettings from './../board/settings';
 import Util from './../util';
 let fs = nw.require('fs');
 let PNG = nw.require('pngjs').PNG;
@@ -104,9 +105,12 @@ export default class SelfTest {
     resetDevice() {
         fs.unlink('C:/Device/reference.png');
         fs.unlink('C:/Device/compare.png');
+        fs.unlink('C:/Device/activations.txt');
+        DeviceSettings.persistKey('activations',0);
     }
 
     processAudio() {
+        let self = this;
         return new Promise((resolve) => {
 
             window.AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -123,7 +127,7 @@ export default class SelfTest {
                     navigator.mozGetUserMedia;
 
                 // ask for an audio input
-                navigator.webkitGetUserMedia(
+                navigator.getUserMedia(
                     {
                         "audio": {
                             "mandatory": {
@@ -134,9 +138,7 @@ export default class SelfTest {
                             },
                             "optional": []
                         },
-                    }, this.onMicrophoneGranted.apply(this,[].push.call(arguments,()=>{
-                        resolve(true);
-                    })), this.onMicrophoneDenied.apply(this,[].push.call(arguments,()=>{resolve(false)})));
+                    }, self.onMicrophoneGranted, self.onMicrophoneDenied);
                     
             } catch (e) {
                 Util.warn('getUserMedia threw exception :' + e);

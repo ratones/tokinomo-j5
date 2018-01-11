@@ -1,5 +1,7 @@
 import * as $ from 'jquery';
 import Arduino from './../board/board';
+import FileSystem from './../board/filesystem';
+import DeviceSettings from './../board/settings';
 const fs = nw.require('fs');
 
 export default class DeviceTest {
@@ -86,7 +88,12 @@ export default class DeviceTest {
         e.stopPropagation();
     }
 
-    resetDevice() { }
+    resetDevice() {
+        fs.unlink('C:/Device/reference.png');
+        fs.unlink('C:/Device/compare.png');
+        fs.unlink('C:/Device/activations.txt');
+        DeviceSettings.persistKey('activations','0');
+     }
 
     moveCustomMotor() {
         // let dir = Number(this.dirCtl.value);
@@ -116,7 +123,8 @@ export default class DeviceTest {
          Arduino.setAlarmOne.call(Arduino,dt);
     }
     extendMotor() { 
-        Arduino.extendMax();
+        // Arduino.extendMax();
+        FileSystem.writeActivation();
     }
     goHomeMotor() { 
         Arduino.goHome();
