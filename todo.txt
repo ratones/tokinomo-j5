@@ -1,0 +1,5 @@
+Add check when no activation file
+Add check when no files
+Add sound check routine
+Add selfcheck routine
+Solve start on alarm issue
