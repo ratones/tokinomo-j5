@@ -20,10 +20,16 @@ class Arduino {
             this.melodyIndex++;
             if (this.melodyIndex >= this.files.length)
                 this.melodyIndex = 0;
-            if (this.canGoHome) this.goHome();
-            setTimeout(()=>{
-                this.timeoutPassed = true;
-            },parseInt(DeviceSettings.get('WAITING_TIME')));
+            // if (this.canGoHome) this.goHome();
+            self.isMotorHome().then(()=>{
+                self.motorPosition = 0;
+                self.lightOff();
+                self.motorpin.high();
+                // self.mutepin.low();
+                setTimeout(()=>{
+                    this.timeoutPassed = true;
+                },parseInt(DeviceSettings.get('WAITING_TIME')));
+            });
         });
         this.canGoHome = false;
         this.isMoving = true;
@@ -77,14 +83,21 @@ class Arduino {
                     });
                     self.mutepin.low();
                     self.motorpin.high();
+                    
                     self.zeropin.read(function (error, value) {
-                        self.zeroPinValue = value;
-                        if (value > 500 && !self.routineInProgress && !self.motorIsMoving) {
-                            self.move(0, 100, 2000, 0, 100);
-                        } else {
-                            //self.motorPosition = 0;
-                        }
-                        //console.log(value);
+                         self.zeroPinValue = value;
+                         if (value > 500 && !self.routineInProgress) {
+                            if(!self.motorOn) {
+                                self.motorpin.low() ;
+                                self.motorOn = true;
+                            }
+                            self.move(0, 100, self.homespeed, 0, 0);
+                         }else{
+                             if(self.motorOn){
+                                self.motorpin.high();
+                                self.motorOn = false;
+                             }
+                         }
                     });
 
                     resolve();
@@ -112,10 +125,8 @@ class Arduino {
     }
     move(dir, steps, speed, accel, decel,timeout) {
         if(!timeout) timeout = 0;
-        console.log(timeout);
         return new Promise((resolve) => {
             setTimeout(()=>{
-                // this.motorpin.low();
                 this.motorIsMoving = true;
                 this.stepper.step({
                     steps: steps,
@@ -125,19 +136,22 @@ class Arduino {
                     decel: decel
                 }
                 , () => {
-                    // this.motorpin.high();
                     this.motorPosition = dir === 0 ? this.motorPosition - steps : this.motorPosition + steps;
-                    // console.log(this.motorPosition);
-                    resolve();
                     this.motorIsMoving = false;
+                    resolve();
                 });
             },timeout);
         });
     }
 
     goHome() {
-        console.log(this.motorPosition);
+        this.mutepin.low();
+        this.routineInProgress = false;
+        return;
         let self = this;
+        // while(self.zeroPinValue >500){
+        //     self.move(0,100,300,0,0);
+        // }
         if (self.zeroPinValue < 800) {
             self.motorPosition = 0;
             self.routineInProgress = false;
@@ -153,17 +167,10 @@ class Arduino {
                 decel: 3000
             }, () => {
                 self.motorPosition = 0;
-                // self.zeropin.query((state)=>{
-                // if(state.value>500){
-                //     self.forceHome();
-                // }
-                // else {
                 self.motorpin.high();
                 self.lightOff();
                 self.routineInProgress = false;
-                self.canGoHome = false; // for pattern movement
-                // }
-                // });
+                console.log('motor is home');
             });
         }
         //console.log(value);
@@ -173,13 +180,11 @@ class Arduino {
     }
     extendMax() {
         return new Promise((resolve) => {
-            // this.listFiles().then(() => { this.isPlaying = true; this.playFile(this.melodyIndex) });
             let self = this;
             self.routineInProgress = true;
-            // this.motorpin.low();
             this.stepper.rpm(800).cw().accel(0).decel(0).step(parseInt(DeviceSettings.get('RANGE_MAX_POSITION')), () => {
                 self.motorPosition = parseInt(DeviceSettings.get('RANGE_MAX_POSITION'));
-                // self.motorpin.high();
+                console.log('motor extended');
                 resolve();
             });
         });
@@ -195,9 +200,13 @@ class Arduino {
             if (self.isPlaying) {
                 self.move(dir, steps, speed, 0, 0).then(() => {
                     if (self.isPlaying) self.bounce();
-                    else self.goHome();
+                    else {
+                        console.log('should go home');
+                        self.goHome();
+                    }
                 });
             } else {
+                console.log('should go home');
                 self.goHome();
             }
         });
@@ -209,7 +218,6 @@ class Arduino {
         let steps = Math.round(Math.random() * 1000);
         if (steps < 200) steps += 200;
         self.move(dir, steps, speed, 0, 0).then(() => {
-            // steps = Math.round(Math.random()*1000);
             dir = dir === 0 ? 1 : 0;
             if (self.isPlaying) {
                 self.move(dir, steps, speed, 0, 0).then(() => {
@@ -244,7 +252,6 @@ class Arduino {
            this.isDonePlaying().then(()=>{
                this.goHome();
            });
-        console.log(pattern);
     }
 
     mockMove(dir, steps, speed, accel, decel) {
@@ -264,7 +271,7 @@ class Arduino {
         let self = this;
         this.files = [];
         return new Promise((resolve) => {
-            fs.readdir('Files', (err, f) => {
+            fs.readdir('C:/Device/Files', (err, f) => {
                 f.forEach(file => {
                     console.log(file);
                     self.files.push(file);
@@ -272,7 +279,6 @@ class Arduino {
                 resolve();
             });
         });
-        // self.playFile(files[0]);
     }
 
     playFile(index) {
@@ -464,12 +470,16 @@ class Arduino {
     }
     isMotorHome() {
         return new Promise((resolve) => {
+            let counter = 0;
             let interv = setInterval(() => {
-                if (!this.routineInProgress) {
+                counter ++;
+                if (this.zeroPinValue < 500) {
                     clearInterval(interv);
                     resolve();
+                }else{
+                    if(counter > 10) this.goHome()// don't wait more then 2 secs - else something went wrong
                 }
-            });
+            },200);
         });
     }
     stopProcedure() {
@@ -497,23 +507,34 @@ class Arduino {
         }
     }
     sensorRead(){
-        FileSystem.writeActivation();
         if(this.routineInProgress)  return;
         if(this.timeoutPassed){
-            this.timeoutPassed = false;
-            if(DeviceSettings.get('CONTINUOS_MOVE')){
-                if(DeviceSettings.get('USE_PATTERN_MOVEMENT')){
-                    this.runPatternRoutine();
-                }else if(DeviceSettings.get('USE_RANDOM_MOVEMENT')){
-                    this.runRandomRoutine();
-                }else{
-                    this.runRoutine();
-                }
+            if(DeviceSettings.get('USE_DELAY')){
+                let delay = parseInt(DeviceSettings.get('DELAY_INTERVAL'));
+                setTimeout(this.runOnMove,delay);
             }else{
-                this.runInOutRoutine();
+                this.runOnMove();
             }
+            // this.runOnMove();
         }
     }
+
+    runOnMove(){
+        FileSystem.writeActivation();
+        this.timeoutPassed = false;
+        if(DeviceSettings.get('CONTINUOS_MOVE')){
+            if(DeviceSettings.get('USE_PATTERN_MOVEMENT')){
+                this.runPatternRoutine();
+            }else if(DeviceSettings.get('USE_RANDOM_MOVEMENT')){
+                this.runRandomRoutine();
+            }else{
+                this.runRoutine();
+            }
+        }else{
+            this.runInOutRoutine();
+        }
+    }
+
     runLoop(){
         console.log('not suposed to rich here')
     }

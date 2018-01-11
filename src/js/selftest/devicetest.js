@@ -123,8 +123,9 @@ export default class DeviceTest {
          Arduino.setAlarmOne.call(Arduino,dt);
     }
     extendMotor() { 
-        // Arduino.extendMax();
-        FileSystem.writeActivation();
+        Arduino.motorpin.low(); 
+        Arduino.extendMax();
+        //FileSystem.writeActivation();
     }
     goHomeMotor() { 
         Arduino.goHome();

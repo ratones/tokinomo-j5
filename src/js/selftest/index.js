@@ -138,7 +138,7 @@ export default class SelfTest {
                             },
                             "optional": []
                         },
-                    }, self.onMicrophoneGranted, self.onMicrophoneDenied);
+                    },  self.onMicrophoneGranted.bind(self,resolve), self.onMicrophoneDenied.bind(self,resolve));
                     
             } catch (e) {
                 Util.warn('getUserMedia threw exception :' + e);
@@ -147,12 +147,13 @@ export default class SelfTest {
         });
     }
 
-    onMicrophoneDenied(e) {
+    onMicrophoneDenied(cb,e) {
         Util.log(e);
+        cb();
         //alert('Stream generation failed.');
     }
 
-    onMicrophoneGranted(stream) {
+    onMicrophoneGranted(cb,stream) {
         // Create an AudioNode from the stream.
         this.mediaStreamSource = this.audioContext.createMediaStreamSource(stream);
 
@@ -162,6 +163,7 @@ export default class SelfTest {
 
         // kick off the visual updating
         this.onLevelChange();
+        cb();
     }
 
     onLevelChange(time) {

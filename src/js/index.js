@@ -122,11 +122,11 @@ client.checkConnection()
                         console.log('Sound failed!');
                     }
                     // read movement and voltage from arduino
-                    // Arduino.initialize().then(() => {
-                    //     Arduino.readVoltage().then((res) => {
-                    //         status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
-                    //     });
-                    // });
+                    Arduino.initialize().then(() => {
+                        Arduino.readVoltage().then((res) => {
+                            status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
+                        });
+                    });
 
                     selftest.record().then((videofile) => {
                         //add data to a form and submit
@@ -245,6 +245,7 @@ function startNetworkPolling() {
 function startDevice() {
     console.info('Device started on' + new Date());
     Arduino.listFiles().then(() => {
+        Arduino.homespeed = Settings.get('FRAGILE_PRODUCT')?120:400;
         let debug = true;
         if (!debug) {
             //Arduino.startRoutine();
