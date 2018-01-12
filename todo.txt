@@ -13,6 +13,8 @@ Trigger distance - Rezolvat in noua versiune de setari
 Battery - Rezolvat in noua versiune de setari
 Grafic automat - De studiat posibilitatea de a genera grafic in platforma web 
                - De stabilit datele pentru generarea graficelor (xy, bars, etc)
+               - De studiat cu Ionut libraria Chart.js
+               - Rezolvat - luat date din fisier txt pentru constructia de grafice
 Setari senzor - Rezolvat in noua versiune
 Landing page - Rezolvat
 Dropdown status campanie - Rezolvat
