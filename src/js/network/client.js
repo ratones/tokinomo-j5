@@ -229,6 +229,9 @@ export default class HttpClient {
     deleteDirectory(dir) {
         let self = this;
         return new Promise(function (resolve, reject) {
+            if (!fs.existsSync(dir)) {
+                resolve();
+            }
             fs.access(dir, function (err) {
                 if (err) {
                     return reject(err);

@@ -3,6 +3,8 @@ import Arduino from './../board/board';
 import FileSystem from './../board/filesystem';
 import DeviceSettings from './../board/settings';
 const fs = nw.require('fs');
+const sys = nw.require('node-windows');
+
 
 export default class DeviceTest {
     constructor() {
@@ -126,6 +128,9 @@ export default class DeviceTest {
         Arduino.motorpin.low(); 
         Arduino.extendMax();
         //FileSystem.writeActivation();
+        // sys.elevate('cmd -Get-Host',(err)=>{
+        //     console.log(err)
+        // });
     }
     goHomeMotor() { 
         Arduino.goHome();
@@ -166,6 +171,4 @@ export default class DeviceTest {
     writeRTC(){
         Arduino.writeRTC.apply(Arduino,arguments);
     }
-
-
 }

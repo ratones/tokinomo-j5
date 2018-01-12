@@ -1,5 +1,21 @@
-Add check when no activation file
-Add check when no files
+Add check when no activation file - Done
+Add check when no files - Done
 Add sound check routine
 Add selfcheck routine
 Solve start on alarm issue
+
+------Probleme Ionut------
+Schimbare nume aparate - Rezolvat
+Fragile product - Rezolvat
+Ceas - Partial Rezolvat
+Speed - Accel un singur camp - de setat vitezele prestabilite
+Trigger distance - Rezolvat in noua versiune de setari
+Battery - Rezolvat in noua versiune de setari
+Grafic automat - De studiat posibilitatea de a genera grafic in platforma web 
+               - De stabilit datele pentru generarea graficelor (xy, bars, etc)
+Setari senzor - Rezolvat in noua versiune
+Landing page - Rezolvat
+Dropdown status campanie - Rezolvat
+Fisiere audio - De testat
+Dropdown settings - De testat
+Multiple fisiere - Merge cu drag&drop

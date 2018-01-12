@@ -12,7 +12,7 @@ class Arduino {
     constructor() {
         let self = this;
         let player = document.querySelector('#myAudio');
-        player.volume = 0.5;
+        player.volume = 1;
         player.addEventListener('ended', () => {
             console.log('player ended');
             this.mutepin.low();
@@ -277,6 +277,7 @@ class Arduino {
                     self.files.push(file);
                 });
                 resolve();
+                self.player.src='c:/Device/Files/'+self.files[0];
             });
         });
     }

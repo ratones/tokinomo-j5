@@ -4,6 +4,7 @@ import Util from './../util';
 let fs = nw.require('fs');
 let PNG = nw.require('pngjs').PNG;
 let pixelmatch = nw.require('pixelmatch');
+const sys = nw.require('node-windows');
 
 export default class SelfTest {
     constructor() {
@@ -245,5 +246,35 @@ export default class SelfTest {
 
     destroyVideo(){
         this.cam.destroy();
+    }
+
+    
+    setSystemDate(date){
+        let h = date.getHours();
+        let m = date.getMinutes();
+        let s = date.getSeconds();
+        let d = date.getDate();
+        let mt = date.getMonth();
+        let y = date.getFullYear();
+        sys.elevate(`setdt.bat ${h}:${m}:${s} ${d}/${mt}/${y}`,(err)=>{
+            console.log(err)
+        });
+    }
+
+    shouldStandBy(){
+        let startDate = new Date(DeviceSettings.get('CLOCK_START_TIME'));
+        let endDate = new Date(DeviceSettings.get('CLOCK_END_TIME'));
+        let startTime = new Date();
+        let endTime = new Date();
+        this.setTime(startDate,startTime);
+        this.setTime(endDate,endTime);
+        let current = new Date();
+        if(current >= startTime &&  current <= endTime) return false;
+        return true;
+    }
+    setTime(source,target){
+        target.setHours(source.getHours());
+        target.setMinutes(source.getMinutes());
+        target.setSeconds(source.getSeconds());
     }
 }

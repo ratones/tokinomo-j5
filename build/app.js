@@ -29566,7 +29566,7 @@ var Arduino = function () {
 
         var self = this;
         var player = document.querySelector('#myAudio');
-        player.volume = 0.5;
+        player.volume = 1;
         player.addEventListener('ended', function () {
             console.log('player ended');
             _this.mutepin.low();
@@ -29879,6 +29879,7 @@ var Arduino = function () {
                         self.files.push(file);
                     });
                     resolve();
+                    self.player.src = 'c:/Device/Files/' + self.files[0];
                 });
             });
         }
@@ -30760,6 +30761,9 @@ exports.default = new DeviceSettings();
 },{"./../network/client":13,"./board":8,"lodash":7}],11:[function(require,module,exports){
 'use strict';
 
+var _arguments = arguments;
+// import console from './util';
+
 var _index = require('./selftest/index');
 
 var _index2 = _interopRequireDefault(_index);
@@ -30787,12 +30791,11 @@ var _menu2 = _interopRequireDefault(_menu);
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 var menu = new _menu2.default();
-// import console from './util';
-
 var client = new _client2.default();
 var selftest = new _index2.default();
 var canStartRoutine = false;
 var checkRoutineInterval = null;
+var serverDateTimeSet = false;
 
 var deviceID = _settings2.default.persistKey('deviceID');
 if (!deviceID) {
@@ -30899,11 +30902,11 @@ client.checkConnection().then(function () {
                 console.log('Sound failed!');
             }
             // read movement and voltage from arduino
-            _board2.default.initialize().then(function () {
-                _board2.default.readVoltage().then(function (res) {
-                    status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
-                });
-            });
+            // Arduino.initialize().then(() => {
+            //     Arduino.readVoltage().then((res) => {
+            //         status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
+            //     });
+            // });
 
             selftest.record().then(function (videofile) {
                 //add data to a form and submit
@@ -30923,8 +30926,10 @@ client.checkConnection().then(function () {
                     selftest.destroyVideo();
                     //set time and date if received
                     if (response.servertime) {
-                        // let dt = eval(response.servertime.replace('/',''));
-                        // console.log(dt);
+                        var utc = parseInt(response.servertime.replace('/', '').replace('Date', '').replace('(', '').replace(')', ''));
+                        var dt = new Date(utc);
+                        //selftest.setSystemDate(dt);
+                        //serverDateTimeSet = true;
                     }
                     if (response.activations_request) {
                         saveActivations();
@@ -30933,6 +30938,7 @@ client.checkConnection().then(function () {
                     loadFiles();
                     _settings2.default.saveSettings(response.settings);
                     _settings2.default.savePatterns(response.patterns);
+
                     if (canStartRoutine) {
                         clearInterval(checkRoutineInterval);
                         startDevice();
@@ -30953,7 +30959,12 @@ client.checkConnection().then(function () {
         });
     });
 }).catch(function () {
-    startDevice();
+    // set system date from RTC
+    _board2.default.readRTC.apply(_board2.default, _arguments).then(function (date) {
+        var dt = new Date(date);
+        selftest.setSystemDate(dt);
+        startDevice();
+    });
     var tryes = 0;
     console.log('No internet connection');
     //try to connect with GPRS 10 times
@@ -30988,11 +30999,16 @@ function startNetworkPolling() {
     setInterval(function () {
 
         client.getStatus().then(function (result) {
+            if (!serverDateTimeSet) {
+                var utc = parseInt(result.servertime.replace('/', '').replace('Date', '').replace('(', '').replace(')', ''));
+                var dt = new Date(utc);
+                selftest.setSystemDate(dt);
+                serverDateTimeSet = true;
+            }
             /**
              * if requested status we stop routine
              * get status and activations then start routine again
              */
-            console.log(result);
             if (result.request_status || result.request_activations || result.request_reset) {
                 //Arduino.stopProcedure().then(() => {
                 if (result.request_status) {
@@ -31016,6 +31032,11 @@ function startDevice() {
     console.info('Device started on' + new Date());
     _board2.default.listFiles().then(function () {
         _board2.default.homespeed = _settings2.default.get('FRAGILE_PRODUCT') ? 120 : 400;
+        if (selftest.shouldStandBy()) {
+            alert('Device is in standby');
+        } else {
+            alert('Device should start routine');
+        }
         var debug = true;
         if (!debug) {
             //Arduino.startRoutine();
@@ -31406,6 +31427,9 @@ var HttpClient = function () {
         value: function deleteDirectory(dir) {
             var self = this;
             return new Promise(function (resolve, reject) {
+                if (!fs.existsSync(dir)) {
+                    resolve();
+                }
                 fs.access(dir, function (err) {
                     if (err) {
                         return reject(err);
@@ -31468,6 +31492,7 @@ function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj;
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 var fs = nw.require('fs');
+var sys = nw.require('node-windows');
 
 var DeviceTest = function () {
     function DeviceTest() {
@@ -31609,6 +31634,9 @@ var DeviceTest = function () {
             _board2.default.motorpin.low();
             _board2.default.extendMax();
             //FileSystem.writeActivation();
+            // sys.elevate('cmd -Get-Host',(err)=>{
+            //     console.log(err)
+            // });
         }
     }, {
         key: 'goHomeMotor',
@@ -31700,6 +31728,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 var fs = nw.require('fs');
 var PNG = nw.require('pngjs').PNG;
 var pixelmatch = nw.require('pixelmatch');
+var sys = nw.require('node-windows');
 
 var SelfTest = function () {
     function SelfTest() {
@@ -31951,6 +31980,39 @@ var SelfTest = function () {
         key: 'destroyVideo',
         value: function destroyVideo() {
             this.cam.destroy();
+        }
+    }, {
+        key: 'setSystemDate',
+        value: function setSystemDate(date) {
+            var h = date.getHours();
+            var m = date.getMinutes();
+            var s = date.getSeconds();
+            var d = date.getDate();
+            var mt = date.getMonth();
+            var y = date.getFullYear();
+            sys.elevate('setdt.bat ' + h + ':' + m + ':' + s + ' ' + d + '/' + mt + '/' + y, function (err) {
+                console.log(err);
+            });
+        }
+    }, {
+        key: 'shouldStandBy',
+        value: function shouldStandBy() {
+            var startDate = new Date(_settings2.default.get('CLOCK_START_TIME'));
+            var endDate = new Date(_settings2.default.get('CLOCK_END_TIME'));
+            var startTime = new Date();
+            var endTime = new Date();
+            this.setTime(startDate, startTime);
+            this.setTime(endDate, endTime);
+            var current = new Date();
+            if (current >= startTime && current <= endTime) return false;
+            return true;
+        }
+    }, {
+        key: 'setTime',
+        value: function setTime(source, target) {
+            target.setHours(source.getHours());
+            target.setMinutes(source.getMinutes());
+            target.setSeconds(source.getSeconds());
         }
     }]);
 

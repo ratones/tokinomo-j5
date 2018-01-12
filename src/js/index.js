@@ -12,6 +12,7 @@ let client = new HttpClient();
 let selftest = new SelfTest();
 let canStartRoutine = false;
 let checkRoutineInterval = null;
+let serverDateTimeSet = false;
 
 let deviceID = Settings.persistKey('deviceID');
 if (!deviceID) {
@@ -122,11 +123,11 @@ client.checkConnection()
                         console.log('Sound failed!');
                     }
                     // read movement and voltage from arduino
-                    Arduino.initialize().then(() => {
-                        Arduino.readVoltage().then((res) => {
-                            status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
-                        });
-                    });
+                    // Arduino.initialize().then(() => {
+                    //     Arduino.readVoltage().then((res) => {
+                    //         status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
+                    //     });
+                    // });
 
                     selftest.record().then((videofile) => {
                         //add data to a form and submit
@@ -147,8 +148,10 @@ client.checkConnection()
                                 selftest.destroyVideo();
                                 //set time and date if received
                                 if (response.servertime) {
-                                    // let dt = eval(response.servertime.replace('/',''));
-                                    // console.log(dt);
+                                    let utc = parseInt(response.servertime.replace('/','').replace('Date','').replace('(','').replace(')',''));
+                                    let dt = new Date(utc);
+                                    //selftest.setSystemDate(dt);
+                                    //serverDateTimeSet = true;
                                 }
                                 if (response.activations_request) {
                                     saveActivations();
@@ -157,6 +160,7 @@ client.checkConnection()
                                 loadFiles();
                                 Settings.saveSettings(response.settings);
                                 Settings.savePatterns(response.patterns);
+
                                 if (canStartRoutine) {
                                     clearInterval(checkRoutineInterval);
                                     startDevice();
@@ -182,7 +186,12 @@ client.checkConnection()
 
     })
     .catch(() => {
-        startDevice();
+        // set system date from RTC
+        Arduino.readRTC.apply(Arduino,arguments).then((date)=>{
+            let dt = new Date(date);
+            selftest.setSystemDate(dt);
+            startDevice();
+        }); 
         let tryes = 0;
         console.log('No internet connection');
         //try to connect with GPRS 10 times
@@ -218,11 +227,16 @@ function startNetworkPolling() {
     setInterval(()=>{
 
         client.getStatus().then((result) => {
+            if(!serverDateTimeSet){
+                let utc = parseInt(result.servertime.replace('/','').replace('Date','').replace('(','').replace(')',''));
+                let dt = new Date(utc);
+                selftest.setSystemDate(dt);
+                serverDateTimeSet = true;
+            }
             /**
              * if requested status we stop routine
              * get status and activations then start routine again
              */
-            console.log(result);
             if (result.request_status || result.request_activations || result.request_reset) {
                 //Arduino.stopProcedure().then(() => {
                     if (result.request_status) {
@@ -246,6 +260,11 @@ function startDevice() {
     console.info('Device started on' + new Date());
     Arduino.listFiles().then(() => {
         Arduino.homespeed = Settings.get('FRAGILE_PRODUCT')?120:400;
+        if(selftest.shouldStandBy()){
+            alert('Device is in standby');
+        }else{
+            alert('Device should start routine');
+        }
         let debug = true;
         if (!debug) {
             //Arduino.startRoutine();
