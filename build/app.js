@@ -29535,8 +29535,30 @@ return jQuery;
 Object.defineProperty(exports, "__esModule", {
     value: true
 });
+var j5 = nw.require('johnny-five');
+var Stepper = j5.Stepper;
+console.log(Stepper);
+Stepper.prototype.home = function () {
+    this.io.stepperHome.apply(this.io, [this.id, 1000, 200]);
+};
+Stepper.prototype.go = function (steps, dir, speed, accel, callback) {
+    this.io.stepperGo.apply(this.io, [this.id, dir, steps, speed, accel, callback]);
+};
+
+exports.default = Stepper;
+
+},{}],9:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+require('./firmataExtension');
+
+require('./accelStepper');
 
 var _settings = require('./../board/settings');
 
@@ -29555,6 +29577,7 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 var five = nw.require('johnny-five');
+
 var SerialPort = nw.require('browser-serialport');
 var fs = nw.require('fs');
 
@@ -29585,7 +29608,7 @@ var Arduino = function () {
             });
         });
         this.canGoHome = false;
-        this.isMoving = true;
+        this.isMoving = false;
         this.motorPosition = 0;
         this.routineInProgress = false;
         this.player = player;
@@ -29648,22 +29671,22 @@ var Arduino = function () {
                         self.mutepin.low();
                         self.motorpin.high();
 
-                        self.zeropin.read(function (error, value) {
-                            self.zeroPinValue = value;
-                            if (value > 500 && !self.routineInProgress) {
-                                if (!self.motorOn) {
-                                    self.motorpin.low();
-                                    self.motorOn = true;
-                                }
-                                self.move(0, 100, self.homespeed, 0, 0);
-                            } else {
-                                if (self.motorOn) {
-                                    self.motorpin.high();
-                                    self.motorOn = false;
-                                }
-                            }
-                        });
-
+                        //     self.zeropin.read(function (error, value) {
+                        //         if(self.isMoving) return;
+                        //         self.zeroPinValue = value;
+                        //          if (value > 500 && !self.routineInProgress) {
+                        //             if(!self.motorOn) {
+                        //                 self.motorpin.low() ;
+                        //                 self.motorOn = true;
+                        //             }
+                        //             self.move(0, 100, self.homespeed, 0, 0);
+                        //          }else{
+                        //              if(self.motorOn){
+                        //                 self.motorpin.high();
+                        //                 self.motorOn = false;
+                        //              }
+                        //          }
+                        //    });
                         resolve();
                     });
                 });
@@ -29695,16 +29718,11 @@ var Arduino = function () {
             if (!timeout) timeout = 0;
             return new Promise(function (resolve) {
                 setTimeout(function () {
-                    _this4.motorIsMoving = true;
-                    _this4.stepper.step({
-                        steps: steps,
-                        direction: dir,
-                        rpm: speed,
-                        accel: accel,
-                        decel: decel
-                    }, function () {
+                    _this4.isMoving = true;
+                    _this4.stepper.go(steps, dir, speed, accel, function () {
                         _this4.motorPosition = dir === 0 ? _this4.motorPosition - steps : _this4.motorPosition + steps;
-                        _this4.motorIsMoving = false;
+                        _this4.isMoving = false;
+                        _this4.motorpin.high();
                         resolve();
                     });
                 }, timeout);
@@ -29713,14 +29731,17 @@ var Arduino = function () {
     }, {
         key: 'goHome',
         value: function goHome() {
+            this.isMoving = false;
             this.mutepin.low();
             this.routineInProgress = false;
+            this.homespeed = _settings2.default.get('FRAGILE_PRODUCT') ? 220 : 600;
+            this.stepper.home();
             return;
             var self = this;
             // while(self.zeroPinValue >500){
             //     self.move(0,100,300,0,0);
             // }
-            if (self.zeroPinValue < 800) {
+            if (self.zeroPinValue < 500) {
                 self.motorPosition = 0;
                 self.routineInProgress = false;
                 return;
@@ -29728,7 +29749,7 @@ var Arduino = function () {
                 var pos = void 0;
                 this.motorpin.low();
                 this.stepper.step({
-                    rpm: 700,
+                    rpm: this.homespeed,
                     direction: 0,
                     steps: self.motorPosition,
                     accel: 10000,
@@ -29738,7 +29759,7 @@ var Arduino = function () {
                     self.motorpin.high();
                     self.lightOff();
                     self.routineInProgress = false;
-                    console.log('motor is home');
+                    // console.log('motor is home');
                 });
             }
             //console.log(value);
@@ -29756,10 +29777,13 @@ var Arduino = function () {
             return new Promise(function (resolve) {
                 var self = _this5;
                 self.routineInProgress = true;
-                _this5.stepper.rpm(800).cw().accel(0).decel(0).step(parseInt(_settings2.default.get('RANGE_MAX_POSITION')), function () {
-                    self.motorPosition = parseInt(_settings2.default.get('RANGE_MAX_POSITION'));
-                    console.log('motor extended');
-                    resolve();
+                // this.stepper.rpm(550).cw().accel(0).decel(0).step(parseInt(DeviceSettings.get('RANGE_MAX_POSITION')), () => {
+                //     self.motorPosition = parseInt(DeviceSettings.get('RANGE_MAX_POSITION'));
+                //     // console.log('motor extended');
+                //     resolve();
+                // });
+                _this5.move(1, 2000, 400, 1000).then(function () {
+                    console.log('extended');
                 });
             });
         }
@@ -29768,19 +29792,19 @@ var Arduino = function () {
         value: function bounce() {
             var self = this;
             var dir = 0;
-            var speed = 400;
+            var speed = 340;
             var steps = parseInt(_settings2.default.get('SWING_MAX_RETRACT'));
             self.move(dir, steps, speed, 0, 0).then(function () {
                 dir = dir === 0 ? 1 : 0;
                 if (self.isPlaying) {
                     self.move(dir, steps, speed, 0, 0).then(function () {
                         if (self.isPlaying) self.bounce();else {
-                            console.log('should go home');
+                            // console.log('should go home');
                             self.goHome();
                         }
                     });
                 } else {
-                    console.log('should go home');
+                    // console.log('should go home');
                     self.goHome();
                 }
             });
@@ -29790,7 +29814,7 @@ var Arduino = function () {
         value: function bounceRandom() {
             var self = this;
             var dir = 0;
-            var speed = 400;
+            var speed = 340;
             var steps = Math.round(Math.random() * 1000);
             if (steps < 200) steps += 200;
             self.move(dir, steps, speed, 0, 0).then(function () {
@@ -29823,8 +29847,8 @@ var Arduino = function () {
                 var delay = p.pause;
                 var steps = Math.abs(Number(p.distance));
                 var dir = Number(p.distance) >= 0 ? 1 : 0;
-                console.log(index);
-                commands.push(self.move.bind(self, dir, steps, 400, 0, 0, delay));
+                // console.log(index);    
+                commands.push(self.move.bind(self, dir, steps, 340, 0, 0, delay));
             }
             var _iteratorNormalCompletion = true;
             var _didIteratorError = false;
@@ -29875,7 +29899,7 @@ var Arduino = function () {
             return new Promise(function (resolve) {
                 fs.readdir('C:/Device/Files', function (err, f) {
                     f.forEach(function (file) {
-                        console.log(file);
+                        // console.log(file);
                         self.files.push(file);
                     });
                     resolve();
@@ -29974,7 +29998,7 @@ var Arduino = function () {
             bytes[1] |= Math.floor(datetime.getMinutes() / 10) << 4 | datetime.getMinutes() % 10;
             bytes[2] |= Math.floor(datetime.getHours() / 10) << 4 | datetime.getHours() % 10;
             bytes[3] |= Math.floor(datetime.getDate() / 10) << 4 | datetime.getDate() % 10;
-            console.log(bytes);
+            // console.log(bytes);
             // self.board.i2cConfig();
             self.board.i2cWrite(0x68, 0x07, bytes);
             self.board.i2cWrite(0x68, 0x0E, [0xFE]);
@@ -30049,13 +30073,16 @@ var Arduino = function () {
             var _this12 = this;
 
             var count = parseInt(_settings2.default.get('BLITZ_COUNT'));
-            if (count > 1) {
+            var interval = parseInt(_settings2.default.get('BLITZ_DELAY'));
+            if (interval > 0) {
                 var state = true;
-                var interval = parseInt(_settings2.default.get('BLITZ_DELAY'));
+                var index = 0;
                 this.lightInterval = setInterval(function () {
+                    if (index > count && count > 1) return;
                     if (state) {
                         _this12.ledpin.high();
                         state = !state;
+                        index++;
                     } else {
                         _this12.ledpin.low();
                         state = !state;
@@ -30112,33 +30139,38 @@ var Arduino = function () {
     }, {
         key: 'isMotorHome',
         value: function isMotorHome() {
-            var _this16 = this;
-
             return new Promise(function (resolve) {
                 var counter = 0;
-                var interv = setInterval(function () {
-                    counter++;
-                    if (_this16.zeroPinValue < 500) {
-                        clearInterval(interv);
-                        resolve();
-                    } else {
-                        if (counter > 10) _this16.goHome(); // don't wait more then 2 secs - else something went wrong
-                    }
-                }, 200);
+                resolve();
+                // this.zeropin.query().then(val=>{
+                //     if(val>500){
+                //         this.move(0,3500,this.homespeed,0,0).then(resolve);
+                //     }
+                // });
+                // let interv = setInterval(() => {
+                //     counter ++;
+                //     if (this.zeroPinValue < 500) {
+                //         clearInterval(interv);
+                //         resolve();
+                //     }else{
+                //         if(counter > 5) this.goHome();// don't wait more then 1 sec - else something went wrong
+                //     }
+                // },200);
+                // resolve();
             });
         }
     }, {
         key: 'stopProcedure',
         value: function stopProcedure() {
-            var _this17 = this;
+            var _this16 = this;
 
             return new Promise(function (resolve) {
-                _this17.player.pause();
-                _this17.mutepin.low();
-                clearInterval(_this17.moveInterval);
-                _this17.isPlaying = false;
-                _this17.lightOff();
-                _this17.isMotorHome().then(function () {
+                _this16.player.pause();
+                _this16.mutepin.low();
+                clearInterval(_this16.moveInterval);
+                _this16.isPlaying = false;
+                _this16.lightOff();
+                _this16.isMotorHome().then(function () {
                     resolve();
                 });
             });
@@ -30146,13 +30178,13 @@ var Arduino = function () {
     }, {
         key: 'startProcedure',
         value: function startProcedure() {
-            var _this18 = this;
+            var _this17 = this;
 
             if (_settings2.default.get('USE_MOTION_SENSOR')) {
                 this.moveInterval = setInterval(function () {
-                    _this18.movepin.query(function (state) {
+                    _this17.movepin.query(function (state) {
                         // console.log(v);
-                        if (state.value > 400) _this18.sensorRead();
+                        if (state.value > 400) _this17.sensorRead();
                     });
                 }, 100);
             } else {
@@ -30166,7 +30198,7 @@ var Arduino = function () {
             if (this.timeoutPassed) {
                 if (_settings2.default.get('USE_DELAY')) {
                     var delay = parseInt(_settings2.default.get('DELAY_INTERVAL'));
-                    setTimeout(this.runOnMove, delay);
+                    setTimeout(this.runOnMove.bind(this), delay);
                 } else {
                     this.runOnMove();
                 }
@@ -30209,7 +30241,7 @@ var Arduino = function () {
 
 exports.default = new Arduino();
 
-},{"./../board/settings":10,"./../util":17,"./filesystem":9}],9:[function(require,module,exports){
+},{"./../board/settings":12,"./../util":19,"./accelStepper":8,"./filesystem":10,"./firmataExtension":11}],10:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -30252,7 +30284,42 @@ var FileSystem = function () {
 
 exports.default = new FileSystem();
 
-},{"./settings":10}],10:[function(require,module,exports){
+},{"./settings":12}],11:[function(require,module,exports){
+(function (Buffer){
+"use strict";
+
+var Firmata = nw.require('firmata');
+
+var END_SYSEX = 0xF7;
+var START_SYSEX = 0xF0;
+var STEPPER = 0x72;
+
+function writeToTransport(board, data) {
+  board.pending++;
+  board.transport.write(new Buffer(data), function () {
+    board.pending--;
+  });
+}
+
+Firmata.prototype.stepperHome = function (deviceNum, speed, accel) {
+  var data = [START_SYSEX, STEPPER, 0x05, deviceNum, speed & 0x7F, speed >> 7 & 0x7F, accel & 0x7F, accel >> 7 & 0x7F, END_SYSEX];
+  writeToTransport(this, data);
+};
+
+Firmata.prototype.stepperGo = function (deviceNum, direction, steps, speed, accel, callback) {
+
+  var data = [START_SYSEX, STEPPER, 0x01, // STEPPER_STEP from firmware
+  deviceNum, direction, // one of this.STEPPER.DIRECTION.*
+  steps & 0x7F, steps >> 7 & 0x7F, steps >> 14 & 0x7f, speed & 0x7F, speed >> 7 & 0x7F];
+  data.push(accel & 0x7F, accel >> 7 & 0x7F);
+  data.push(END_SYSEX);
+  writeToTransport(this, data);
+  this.once("stepper-done-" + deviceNum, callback);
+};
+module.exports = Firmata;
+
+}).call(this,require("buffer").Buffer)
+},{"buffer":3}],12:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -30758,7 +30825,7 @@ var DeviceSettings = function () {
 
 exports.default = new DeviceSettings();
 
-},{"./../network/client":13,"./board":8,"lodash":7}],11:[function(require,module,exports){
+},{"./../network/client":15,"./board":9,"lodash":7}],13:[function(require,module,exports){
 'use strict';
 
 var _arguments = arguments;
@@ -30902,11 +30969,11 @@ client.checkConnection().then(function () {
                 console.log('Sound failed!');
             }
             // read movement and voltage from arduino
-            // Arduino.initialize().then(() => {
-            //     Arduino.readVoltage().then((res) => {
-            //         status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
-            //     });
-            // });
+            _board2.default.initialize().then(function () {
+                _board2.default.readVoltage().then(function (res) {
+                    status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
+                });
+            });
 
             selftest.record().then(function (videofile) {
                 //add data to a form and submit
@@ -30918,8 +30985,12 @@ client.checkConnection().then(function () {
                 formData.append('battery', status.battery);
                 formData.append('activations', '258');
                 formData.append('id', deviceID);
-                var fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
-                formData.append('files', fileOfBlob);
+                if (videofile) {
+                    var fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
+                    formData.append('files', fileOfBlob);
+                } else {
+                    formData.append('files', null);
+                }
                 client.postFormData(formData).then(function (response) {
                     console.log('Data received from server');
                     //destroy video control
@@ -30928,8 +30999,8 @@ client.checkConnection().then(function () {
                     if (response.servertime) {
                         var utc = parseInt(response.servertime.replace('/', '').replace('Date', '').replace('(', '').replace(')', ''));
                         var dt = new Date(utc);
-                        //selftest.setSystemDate(dt);
-                        //serverDateTimeSet = true;
+                        selftest.setSystemDate(dt);
+                        serverDateTimeSet = true;
                     }
                     if (response.activations_request) {
                         saveActivations();
@@ -31029,8 +31100,8 @@ function startNetworkPolling() {
 }
 
 function startDevice() {
-    console.info('Device started on' + new Date());
     _board2.default.listFiles().then(function () {
+        console.info('Device started on' + new Date());
         _board2.default.homespeed = _settings2.default.get('FRAGILE_PRODUCT') ? 120 : 400;
         if (selftest.shouldStandBy()) {
             alert('Device is in standby');
@@ -31053,8 +31124,10 @@ function loadFiles() {
 function saveActivations() {
     client.postActivations();
 }
+// Arduino.initialize().then(startDevice)
+// startDevice();
 
-},{"./board/board":8,"./board/settings":10,"./menu":12,"./network/client":13,"./selftest/index":15,"./selftest/status":16}],12:[function(require,module,exports){
+},{"./board/board":9,"./board/settings":12,"./menu":14,"./network/client":15,"./selftest/index":17,"./selftest/status":18}],14:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -31140,7 +31213,7 @@ var Menu = function Menu() {
 
 exports.default = Menu;
 
-},{"./board/settings":10,"./selftest/devicetest":14}],13:[function(require,module,exports){
+},{"./board/settings":12,"./selftest/devicetest":16}],15:[function(require,module,exports){
 (function (process,Buffer){
 'use strict';
 
@@ -31364,7 +31437,7 @@ var HttpClient = function () {
                         var blob = this.response;
                         var fileReader = new FileReader();
                         var filepath = path.join(os.tmpdir(), 'test.zip');
-                        _util2.default.log(os.tmpdir());
+                        // console.log(os.tmpdir());
                         fileReader.onload = function () {
                             _util2.default.log('Writing file...');
                             fs.writeFileSync(filepath, Buffer(new Uint8Array(this.result)));
@@ -31460,7 +31533,7 @@ var HttpClient = function () {
 exports.default = HttpClient;
 
 }).call(this,require('_process'),require("buffer").Buffer)
-},{"./../board/settings":10,"./../util":17,"_process":2,"buffer":3,"jquery":6}],14:[function(require,module,exports){
+},{"./../board/settings":12,"./../util":19,"_process":2,"buffer":3,"jquery":6}],16:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -31602,9 +31675,9 @@ var DeviceTest = function () {
     }, {
         key: 'moveCustomMotor',
         value: function moveCustomMotor() {
-            // let dir = Number(this.dirCtl.value);
-            // let speedChar = this.speedCtl.value;
-            // let steps = Number(this.stepsCtl.value);
+            var dir = Number(this.dirCtl.value);
+            var speed = Number(this.speedCtl.value);
+            var steps = Number(this.stepsCtl.value);
             // let speed = 300;
             // switch(speedChar){
             //     case 'low':
@@ -31617,16 +31690,17 @@ var DeviceTest = function () {
             //     speed = 600;
             //     break;
             // }
-            // Arduino.routineInProgress = true;
-            // Arduino.move(dir,steps,speed,0,0);
-            var alarm = this.stepsCtl.value.split(':');
-            var h = parseInt(alarm[0]);
-            var m = parseInt(alarm[1]);
-            var dt = new Date();
-            dt.setHours(h);
-            dt.setMinutes(m);
-            //Arduino.disableAlarmOne();
-            _board2.default.setAlarmOne.call(_board2.default, dt);
+            _board2.default.motorpin.low();
+            _board2.default.routineInProgress = true;
+            _board2.default.move(dir, steps, speed, 0, 0).then(function () {});
+            // let alarm = this.stepsCtl.value.split(':');
+            // let h = parseInt(alarm[0]);
+            // let m = parseInt(alarm[1]);
+            // let dt = new Date();
+            // dt.setHours(h);
+            // dt.setMinutes(m);
+            // //Arduino.disableAlarmOne();
+            //  Arduino.setAlarmOne.call(Arduino,dt);
         }
     }, {
         key: 'extendMotor',
@@ -31672,7 +31746,7 @@ var DeviceTest = function () {
         key: 'ledCheck',
         value: function ledCheck(e) {
             var chk = e.target;
-            console.log(chk.checked);
+            // console.log(chk.checked);
             if (chk.checked) _board2.default.lightOn.apply(_board2.default, arguments);else _board2.default.lightOff.apply(_board2.default, arguments);
             var rclass = chk.checked ? 'red' : 'green';
             var aclass = chk.checked ? 'green' : 'red';
@@ -31700,7 +31774,7 @@ var DeviceTest = function () {
 
 exports.default = DeviceTest;
 
-},{"./../board/board":8,"./../board/filesystem":9,"./../board/settings":10,"jquery":6}],15:[function(require,module,exports){
+},{"./../board/board":9,"./../board/filesystem":10,"./../board/settings":12,"jquery":6}],17:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -31753,6 +31827,7 @@ var SelfTest = function () {
                 debug: true
             });
             return new Promise(function (resolve, reject) {
+                if (_this.cam.nodevice) resolve(false);
                 _this.cam.snapshot().then(function (image) {
                     // Util.log(image);
                     var base64Data = image.replace(/^data:image\/png;base64,/, "");
@@ -31786,7 +31861,7 @@ var SelfTest = function () {
                 }).catch(function (err) {
                     resolve(false);
                     _this.cam.stop();
-                    _util2.default.log(err);
+                    _util2.default.error(err);
                 });
             });
             //setTimeout(()=>{this.cam.stop();},3000)
@@ -31797,6 +31872,7 @@ var SelfTest = function () {
             var _this2 = this;
 
             return new Promise(function (resolve) {
+                if (_this2.cam.nodevice) resolve(null);
                 _this2.cam.setVideo({
                     audio: true,
                     video: true,
@@ -31806,6 +31882,8 @@ var SelfTest = function () {
                 _this2.cam.record().then(function (videofile) {
                     resolve(videofile);
                     // this.cam.reset();
+                }).catch(function () {
+                    resolve(null);
                 });
             });
         }
@@ -31872,7 +31950,13 @@ var SelfTest = function () {
                             },
                             "optional": []
                         }
-                    }, self.onMicrophoneGranted.bind(self, resolve), self.onMicrophoneDenied.bind(self, resolve));
+                    }, function (e) {
+                        self.onMicrophoneGranted(e);
+                        resolve(true);
+                    }, function (e) {
+                        self.onMicrophoneDenied(e);
+                        resolve(false);
+                    });
                 } catch (e) {
                     _util2.default.warn('getUserMedia threw exception :' + e);
                     resolve(false);
@@ -31881,14 +31965,13 @@ var SelfTest = function () {
         }
     }, {
         key: 'onMicrophoneDenied',
-        value: function onMicrophoneDenied(cb, e) {
-            _util2.default.log(e);
-            cb();
+        value: function onMicrophoneDenied(e) {
+            _util2.default.warn(e);
             //alert('Stream generation failed.');
         }
     }, {
         key: 'onMicrophoneGranted',
-        value: function onMicrophoneGranted(cb, stream) {
+        value: function onMicrophoneGranted(stream) {
             // Create an AudioNode from the stream.
             this.mediaStreamSource = this.audioContext.createMediaStreamSource(stream);
 
@@ -31897,8 +31980,7 @@ var SelfTest = function () {
             this.mediaStreamSource.connect(this.meter);
 
             // kick off the visual updating
-            this.onLevelChange();
-            cb();
+            var level = this.onLevelChange();
         }
     }, {
         key: 'onLevelChange',
@@ -31990,8 +32072,8 @@ var SelfTest = function () {
             var d = date.getDate();
             var mt = date.getMonth();
             var y = date.getFullYear();
-            sys.elevate('setdt.bat ' + h + ':' + m + ':' + s + ' ' + d + '/' + mt + '/' + y, function (err) {
-                console.log(err);
+            sys.elevate('setdt.bat ' + h + ':' + m + ':' + s + ' ' + mt + '/' + d + '/' + y, function (err) {
+                _util2.default.log(err);
             });
         }
     }, {
@@ -32021,7 +32103,7 @@ var SelfTest = function () {
 
 exports.default = SelfTest;
 
-},{"../webcam/camhandler":18,"./../board/settings":10,"./../util":17}],16:[function(require,module,exports){
+},{"../webcam/camhandler":20,"./../board/settings":12,"./../util":19}],18:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -32042,7 +32124,7 @@ var DeviceStatus = function DeviceStatus() {
 
 exports.default = DeviceStatus;
 
-},{}],17:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -32116,7 +32198,7 @@ var console = function () {
 
 exports.default = new console();
 
-},{}],18:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -32125,17 +32207,14 @@ Object.defineProperty(exports, "__esModule", {
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _util = require('./../util');
-
-var _util2 = _interopRequireDefault(_util);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
+// import console from './../util';
 var CamHandler = function () {
     function CamHandler(options) {
         _classCallCheck(this, CamHandler);
+
+        this.nodevice = false;
 
         var player = videojs("myVideo", {
             controls: true,
@@ -32150,15 +32229,13 @@ var CamHandler = function () {
             videojs.log('Using video.js', videojs.VERSION, 'with videojs-record', videojs.getPluginVersion('record'), 'and recordrtc', RecordRTC.version);
         });
         // error handling
-        player.on('deviceError', function () {
-            _util2.default.log('device error:', player.deviceErrorCode);
-        });
+
         player.on('error', function (error) {
-            _util2.default.log('error:', error);
+            console.error('error:', error);
         });
         // user clicked the record button and started recording
         player.on('startRecord', function () {
-            _util2.default.log('started recording!');
+            console.log('Start recording!');
         });
         // user completed recording and stream is available
         // player.on('finishRecord', function() {
@@ -32232,6 +32309,12 @@ var CamHandler = function () {
                     this.player.off('finishedRecord');
                     this.player.off('error');
                 });
+                _this.player.on('deviceError', function (error) {
+                    // this.player.off('deviceReady');
+                    // this.player.off('finishedRecord');
+                    // this.player.off('error');
+                    reject(error);
+                });
             });
         }
     }, {
@@ -32258,6 +32341,12 @@ var CamHandler = function () {
                     this.player.off('error');
                     // this.player.record().destroy();
                 });
+                _this2.player.on('deviceError', function (error) {
+                    // this.player.off('deviceReady');
+                    // this.player.off('finishedRecord');
+                    // this.player.off('error');
+                    reject(error);
+                });
             });
         }
     }]);
@@ -32267,4 +32356,4 @@ var CamHandler = function () {
 
 exports.default = CamHandler;
 
-},{"./../util":17}]},{},[11]);
+},{}]},{},[13]);

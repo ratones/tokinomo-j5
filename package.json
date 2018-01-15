@@ -10,8 +10,6 @@
   "license": "ISC",
   "dependencies": {
     "adm-zip": "^0.4.7",
-    "audio-loader": "^1.0.3",
-    "audio-play": "^2.2.0",
     "babel-preset-es2015": "^6.3.13",
     "babel-preset-react": "^6.3.13",
     "babel-preset-stage-1": "^6.3.13",
@@ -37,8 +35,6 @@
     "pretty-hrtime": "^1.0.1",
     "require-dir": "^0.3.0",
     "rimraf": "^2.6.1",
-    "runas": "^3.1.1",
-    "serialport": "^6.0.4",
     "stringify": "^5.1.0",
     "videojs-record": "^2.0.5",
     "vinyl-source-stream": "^1.0.0",

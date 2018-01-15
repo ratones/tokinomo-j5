@@ -1,7 +1,4 @@
-import './firmataExtension';
-import './accelStepper';
 let five = nw.require('johnny-five');
-
 let SerialPort = nw.require('browser-serialport');
 let fs = nw.require('fs');
 
@@ -131,15 +128,16 @@ class Arduino {
         return new Promise((resolve) => {
             setTimeout(()=>{
                 this.isMoving = true;
-                this.stepper.go(
-                    steps,
-                    dir,
-                    speed,
-                    accel
+                this.stepper.step({
+                    steps: steps,
+                    direction: dir,
+                    rpm: speed,
+                    accel: accel,
+                    decel: decel
+                }
                 , () => {
                     this.motorPosition = dir === 0 ? this.motorPosition - steps : this.motorPosition + steps;
                     this.isMoving = false;
-                    this.motorpin.high();
                     resolve();
                 });
             },timeout);
@@ -187,13 +185,10 @@ class Arduino {
         return new Promise((resolve) => {
             let self = this;
             self.routineInProgress = true;
-            // this.stepper.rpm(550).cw().accel(0).decel(0).step(parseInt(DeviceSettings.get('RANGE_MAX_POSITION')), () => {
-            //     self.motorPosition = parseInt(DeviceSettings.get('RANGE_MAX_POSITION'));
-            //     // console.log('motor extended');
-            //     resolve();
-            // });
-            this.move(1,2000,400,1000).then(()=>{
-                console.log('extended');
+            this.stepper.rpm(550).cw().accel(0).decel(0).step(parseInt(DeviceSettings.get('RANGE_MAX_POSITION')), () => {
+                self.motorPosition = parseInt(DeviceSettings.get('RANGE_MAX_POSITION'));
+                // console.log('motor extended');
+                resolve();
             });
         });
     }

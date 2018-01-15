@@ -1,6 +1,6 @@
 import CamHandler from '../webcam/camhandler';
 import DeviceSettings from './../board/settings';
-import Util from './../util';
+import console from './../util';
 let fs = nw.require('fs');
 let PNG = nw.require('pngjs').PNG;
 let pixelmatch = nw.require('pixelmatch');
@@ -23,6 +23,7 @@ export default class SelfTest {
             debug: true
         });
         return new Promise((resolve, reject) => {
+            if(this.cam.nodevice) resolve(false);
             this.cam.snapshot().then((image) => {
                 // Util.log(image);
                 let base64Data = image.replace(/^data:image\/png;base64,/, "");
@@ -33,7 +34,7 @@ export default class SelfTest {
                         });
                     } else {
                         fs.writeFile("C:/Device/compare.png", base64Data, 'base64', function (err) {
-                            Util.log('Picture taken. Comparing images...');
+                            console.log('Picture taken. Comparing images...');
                             let img1 = fs.createReadStream('C:/Device/reference.png').pipe(new PNG()).on('parsed', doneReading);
                             let img2 = fs.createReadStream('C:/Device/compare.png').pipe(new PNG()).on('parsed', doneReading);
                             let filesRead = 0;
@@ -44,7 +45,7 @@ export default class SelfTest {
                                 let px = pixelmatch(img1.data, img2.data, diff.data, img1.width, img1.height, { threshold: 0.8 });
                                 if (px < 10) resolve(true);
                                 else resolve(false);
-                                Util.log(px);
+                                console.log(px);
                                 img1 = null;
                                 img2 = null;
                                 diff.pack().pipe(fs.createWriteStream('C:/Device/diff.png'));
@@ -57,7 +58,7 @@ export default class SelfTest {
             }).catch((err) => {
                 resolve(false);
                 this.cam.stop();
-                Util.log(err);
+                console.error(err);
             });
         });
         //setTimeout(()=>{this.cam.stop();},3000)
@@ -65,6 +66,7 @@ export default class SelfTest {
 
     record() {
         return new Promise((resolve) => {
+            if(this.cam.nodevice) resolve(null);
             this.cam.setVideo(
                 {
                     audio: true,
@@ -75,6 +77,8 @@ export default class SelfTest {
             this.cam.record().then((videofile) => {
                 resolve(videofile);
                 // this.cam.reset();
+            }).catch(()=>{
+                resolve(null);
             });
         });
     }
@@ -139,22 +143,27 @@ export default class SelfTest {
                             },
                             "optional": []
                         },
-                    },  self.onMicrophoneGranted.bind(self,resolve), self.onMicrophoneDenied.bind(self,resolve));
+                    },  (e)=>{
+                        self.onMicrophoneGranted(e);
+                        resolve(true);
+                    },(e)=>{
+                         self.onMicrophoneDenied(e);
+                         resolve(false);
+                    });
                     
             } catch (e) {
-                Util.warn('getUserMedia threw exception :' + e);
+                console.warn('getUserMedia threw exception :' + e);
                 resolve(false);
             }
         });
     }
 
-    onMicrophoneDenied(cb,e) {
-        Util.log(e);
-        cb();
+    onMicrophoneDenied(e) {
+        console.warn(e);
         //alert('Stream generation failed.');
     }
 
-    onMicrophoneGranted(cb,stream) {
+    onMicrophoneGranted(stream) {
         // Create an AudioNode from the stream.
         this.mediaStreamSource = this.audioContext.createMediaStreamSource(stream);
 
@@ -163,8 +172,7 @@ export default class SelfTest {
         this.mediaStreamSource.connect(this.meter);
 
         // kick off the visual updating
-        this.onLevelChange();
-        cb();
+        let level = this.onLevelChange();
     }
 
     onLevelChange(time) {
@@ -256,7 +264,7 @@ export default class SelfTest {
         let d = date.getDate();
         let mt = date.getMonth();
         let y = date.getFullYear();
-        sys.elevate(`setdt.bat ${h}:${m}:${s} ${d}/${mt}/${y}`,(err)=>{
+        sys.elevate(`setdt.bat ${h}:${m}:${s} ${mt}/${d}/${y}`,(err)=>{
             console.log(err)
         });
     }

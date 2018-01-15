@@ -98,9 +98,9 @@ export default class DeviceTest {
      }
 
     moveCustomMotor() {
-        // let dir = Number(this.dirCtl.value);
-        // let speedChar = this.speedCtl.value;
-        // let steps = Number(this.stepsCtl.value);
+        let dir = Number(this.dirCtl.value);
+        let speed = Number(this.speedCtl.value);
+        let steps = Number(this.stepsCtl.value);
         // let speed = 300;
         // switch(speedChar){
         //     case 'low':
@@ -113,16 +113,19 @@ export default class DeviceTest {
         //     speed = 600;
         //     break;
         // }
-        // Arduino.routineInProgress = true;
-        // Arduino.move(dir,steps,speed,0,0);
-        let alarm = this.stepsCtl.value.split(':');
-        let h = parseInt(alarm[0]);
-        let m = parseInt(alarm[1]);
-        let dt = new Date();
-        dt.setHours(h);
-        dt.setMinutes(m);
-        //Arduino.disableAlarmOne();
-         Arduino.setAlarmOne.call(Arduino,dt);
+        Arduino.motorpin.low(); 
+        Arduino.routineInProgress = true;
+        Arduino.move(dir,steps,speed,0,0).then(()=>{
+            
+        });
+        // let alarm = this.stepsCtl.value.split(':');
+        // let h = parseInt(alarm[0]);
+        // let m = parseInt(alarm[1]);
+        // let dt = new Date();
+        // dt.setHours(h);
+        // dt.setMinutes(m);
+        // //Arduino.disableAlarmOne();
+        //  Arduino.setAlarmOne.call(Arduino,dt);
     }
     extendMotor() { 
         Arduino.motorpin.low(); 
@@ -154,7 +157,7 @@ export default class DeviceTest {
     }
     ledCheck(e) {
         let chk = e.target;
-        console.log(chk.checked);
+        // console.log(chk.checked);
         if(chk.checked) Arduino.lightOn.apply(Arduino,arguments);
         else Arduino.lightOff.apply(Arduino,arguments);
         let rclass = chk.checked ? 'red' : 'green';

@@ -1,5 +1,6 @@
-import Util from './../util';
+// import console from './../util';
 export default class CamHandler{
+    nodevice = false;
     constructor(options){
       let player = videojs("myVideo", {
             controls: true,
@@ -16,15 +17,13 @@ export default class CamHandler{
                 'and recordrtc', RecordRTC.version);
         });
         // error handling
-        player.on('deviceError', function() {
-            Util.log('device error:', player.deviceErrorCode);
-        });
+        
         player.on('error', function(error) {
-            Util.log('error:', error);
+            console.error('error:', error);
         });
         // user clicked the record button and started recording
         player.on('startRecord', function() {
-            Util.log('started recording!');
+            console.log('Start recording!');
         });
         // user completed recording and stream is available
         // player.on('finishRecord', function() {
@@ -88,6 +87,12 @@ export default class CamHandler{
                 this.player.off('finishedRecord');
                 this.player.off('error');
             });
+            this.player.on('deviceError', function(error) {
+                // this.player.off('deviceReady');
+                // this.player.off('finishedRecord');
+                // this.player.off('error');
+                reject(error);
+            });
         });
     }
     record(){
@@ -109,6 +114,12 @@ export default class CamHandler{
                 this.player.off('finishedRecord');
                 this.player.off('error');
                 // this.player.record().destroy();
+            });
+            this.player.on('deviceError', function(error) {
+                // this.player.off('deviceReady');
+                // this.player.off('finishedRecord');
+                // this.player.off('error');
+                reject(error);
             });
         });
     }

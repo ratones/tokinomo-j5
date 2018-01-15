@@ -167,7 +167,7 @@ export default class HttpClient {
                     var blob = this.response;
                     var fileReader = new FileReader();
                     var filepath = path.join(os.tmpdir(), 'test.zip');
-                    console.log(os.tmpdir());
+                    // console.log(os.tmpdir());
                     fileReader.onload = function () {
                         console.log('Writing file...');
                         fs.writeFileSync(filepath, Buffer(new Uint8Array(this.result)));

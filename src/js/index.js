@@ -123,11 +123,11 @@ client.checkConnection()
                         console.log('Sound failed!');
                     }
                     // read movement and voltage from arduino
-                    // Arduino.initialize().then(() => {
-                    //     Arduino.readVoltage().then((res) => {
-                    //         status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
-                    //     });
-                    // });
+                    Arduino.initialize().then(() => {
+                        Arduino.readVoltage().then((res) => {
+                            status.battery = 'Volts:' + res.volts + ';Amps:' + res.amps;
+                        });
+                    });
 
                     selftest.record().then((videofile) => {
                         //add data to a form and submit
@@ -139,8 +139,12 @@ client.checkConnection()
                         formData.append('battery', status.battery);
                         formData.append('activations', '258');
                         formData.append('id', deviceID);
-                        let fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
-                        formData.append('files', fileOfBlob);
+                        if(videofile){
+                            let fileOfBlob = new File([videofile.video], 'Device' + deviceID + '.mp4');
+                            formData.append('files', fileOfBlob);
+                        }else{
+                            formData.append('files', null);
+                        }
                         client.postFormData(formData)
                             .then((response) => {
                                 console.log('Data received from server');
@@ -150,8 +154,8 @@ client.checkConnection()
                                 if (response.servertime) {
                                     let utc = parseInt(response.servertime.replace('/','').replace('Date','').replace('(','').replace(')',''));
                                     let dt = new Date(utc);
-                                    //selftest.setSystemDate(dt);
-                                    //serverDateTimeSet = true;
+                                    selftest.setSystemDate(dt);
+                                    serverDateTimeSet = true;
                                 }
                                 if (response.activations_request) {
                                     saveActivations();
@@ -257,8 +261,8 @@ function startNetworkPolling() {
 }
 
 function startDevice() {
-    console.info('Device started on' + new Date());
     Arduino.listFiles().then(() => {
+        console.info('Device started on' + new Date());
         Arduino.homespeed = Settings.get('FRAGILE_PRODUCT')?120:400;
         if(selftest.shouldStandBy()){
             alert('Device is in standby');
@@ -281,3 +285,5 @@ function loadFiles() {
 function saveActivations() {
     client.postActivations();
 }
+// Arduino.initialize().then(startDevice)
+// startDevice();
